@@ -1,255 +1,244 @@
 # Galiyaara  
-
 *Repository name:* **Galiyaara**  
-*Description:* *(No description provided – add a short summary of what the project does here.)*  
+*Description:* *None*  
+
+> **NOTE:** This documentation is a template that can be customized once the actual purpose, features, and codebase of **Galiyaara** are defined. Replace the placeholder text (marked with `TODO`) with concrete information about the project.
 
 ---  
 
-## Table of Contents  
-
-| Section | Description |
-|---------|-------------|
-| [Installation](#installation) | How to get Galiyaara up and running |
-| [Quick Start / Usage](#usage) | Minimal example that shows the library in action |
-| [API Documentation](#api-documentation) | Reference for all public classes, functions, and modules |
-| [Examples](#examples) | More complete, real‑world usage scenarios |
-| [Contributing](#contributing) | How to help improve the project |
-| [License](#license) | Legal information |
-| [Support](#support) | Getting help and reporting bugs |
+## Table of Contents
+1. [Installation](#installation)  
+2. [Quick Start / Usage](#quick-start--usage)  
+3. [API Documentation](#api-documentation)  
+4. [Examples](#examples)  
+5. [Contributing](#contributing)  
+6. [License](#license)  
+7. [Contact & Support](#contact--support)  
 
 ---  
 
 ## Installation  
 
-> **⚠️ Prerequisites**  
-> * Python 3.9 – 3.12 (or the version(s) you officially support)  
-> * `pip` (≥ 21.0) or a compatible package manager  
-> * (Optional) `git` if you want to install from source  
+### Prerequisites
+| Tool | Minimum Version | Why? |
+|------|-----------------|------|
+| **Python** | 3.8+ | Core language runtime |
+| **pip** | 20.0+ | Package manager |
+| **Git** | 2.20+ | To clone the repository |
+| **[Optional]** | | Any additional system‑level dependencies (e.g., `ffmpeg`, `libmagic`, `node`, etc.) |
 
-### 1. Install from PyPI (recommended)  
+> **If Galiyaara is not a Python project, replace the above table with the appropriate language/runtime requirements (e.g., Node.js, Java, Rust, etc.).**
 
-If Galiyaara is published on the Python Package Index, the simplest way to install it is:
+### Installing from PyPI (if published)
 
 ```bash
 pip install galiyaara
 ```
 
-### 2. Install from source (editable mode)  
+### Installing from source
 
 ```bash
-# Clone the repository
+# 1️⃣ Clone the repository
 git clone https://github.com/<your‑org-or‑user>/Galiyaara.git
 cd Galiyaara
 
-# Install the package in editable mode with development dependencies
-pip install -e .[dev]
+# 2️⃣ Create a virtual environment (recommended)
+python -m venv .venv
+source .venv/bin/activate   # On Windows: .venv\Scripts\activate
+
+# 3️⃣ Install the package in editable mode
+pip install -e .
 ```
 
-> **Tip:** The optional `dev` extra pulls in testing, linting, and documentation tools (`pytest`, `ruff`, `mkdocs`, …).  
+### Installing optional extras
 
-### 3. Build and install a wheel manually  
+If the project ships with optional feature sets (e.g., `dev`, `test`, `docs`), they can be installed via extras:
 
 ```bash
-# Build the distribution
-python -m build
-
-# Install the generated wheel
-pip install dist/galiyaara-*.whl
+pip install -e .[dev,test,docs]
 ```
 
-### 4. Verify the installation  
-
-```bash
-python -c "import galiyaara; print(galiyaara.__version__)"
-```
-
-You should see the current version printed without errors.
+> **Tip:** Run `pip list` after installation to verify that `galiyaara` appears in the environment.
 
 ---  
 
-## Usage  
+## Quick Start / Usage  
 
-Below is a minimal “Hello, World!”‑style snippet that demonstrates the typical workflow. Replace the placeholder code with the actual API calls of your library.
+Below is a minimal “Hello‑World” style snippet that demonstrates the most common entry point of **Galiyaara**. Replace the placeholder code with the real API calls once they are defined.
 
 ```python
-# example.py
-from galiyaara import CoreProcessor, utils
+# example_usage.py
+from galiyaara import CoreClass   # TODO: replace with actual import(s)
 
 def main():
-    # Initialise the main class (replace with the real entry point)
-    processor = CoreProcessor(config_path="config.yaml")
+    # Initialise the main object (adjust arguments as needed)
+    client = CoreClass(
+        config_path="config.yaml",   # TODO: describe required config
+        verbose=True
+    )
 
-    # Load some data – the real function may differ
-    data = utils.load_json("data/input.json")
-
-    # Process the data
-    result = processor.run(data)
-
-    # Do something with the result
-    utils.save_json(result, "data/output.json")
-    print("Processing complete!")
+    # Perform a basic operation
+    result = client.do_something("sample input")
+    print("Result:", result)
 
 if __name__ == "__main__":
     main()
 ```
 
-Run the example:
+### Running the example
 
 ```bash
-python example.py
+python example_usage.py
 ```
 
-### Command‑line interface (if applicable)
+### Command‑line interface (CLI)
 
-If Galiyaara ships a CLI, the entry point is usually installed as a console script:
+If **Galiyaara** provides a CLI, the typical entry point will look like:
 
 ```bash
-# Show the help message
 galiyaara --help
-
-# Example command
-galiyaara process --config config.yaml data/input.json -o data/output.json
 ```
+
+Sample sub‑commands (replace with real ones):
+
+| Command | Description |
+|---------|-------------|
+| `galiyaara run <input>` | Executes the primary workflow on `<input>`. |
+| `galiyaara serve` | Starts a local HTTP server (if applicable). |
+| `galiyaara config set <key> <value>` | Updates configuration values. |
 
 ---  
 
 ## API Documentation  
 
-> **⚙️ How to generate the docs locally**  
-> ```bash
-> mkdocs serve   # or `sphinx-build -b html docs/ docs/_build`
-> ```
+> **Tip:** Generate up‑to‑date API docs automatically with tools like **Sphinx**, **MkDocs**, or **Typedoc** (for TypeScript). The sections below are placeholders; fill them with real signatures, type hints, and descriptions.
 
-Below is a **high‑level** overview of the public API. Replace the placeholders with the actual modules, classes, and functions from your codebase.
+### Core Modules  
 
-### `galiyaara.__init__`
+#### `galiyaara.core`
+| Class / Function | Purpose | Signature | Returns |
+|------------------|---------|-----------|---------|
+| `CoreClass` | Main entry point for the library. | `CoreClass(config_path: str, verbose: bool = False)` | Instance of `CoreClass`. |
+| `process_data` | Utility to transform raw data. | `process_data(data: Any, *, mode: str = "default") -> ProcessedData` | `ProcessedData` object. |
+| `VERSION` | Library version string. | `VERSION: str` | e.g., `"1.2.3"` |
 
-| Symbol | Type | Description |
-|--------|------|-------------|
-| `__version__` | `str` | Current library version (e.g., `"1.2.3"`). |
-| `CoreProcessor` | `class` | Main entry point for processing pipelines. |
-| `utils` | `module` | Helper utilities (I/O, validation, etc.). |
+#### `galiyaara.utils`
+| Function | Purpose | Signature | Returns |
+|----------|---------|-----------|---------|
+| `load_config` | Reads a YAML/JSON config file. | `load_config(path: str) -> dict` | Configuration dictionary. |
+| `save_results` | Persists results to disk. | `save_results(data: Any, path: str) -> None` | — |
+| `logger` | Configured logger instance. | `logger(name: str = "galiyaara") -> logging.Logger` | Logger object. |
 
-### `galiyaara.core`  
+#### `galiyaara.exceptions`
+| Exception | When it is raised |
+|-----------|-------------------|
+| `GaliyaaraError` | Base class for all custom errors. |
+| `InvalidInputError` | Input validation fails. |
+| `ConfigurationError` | Problems loading or parsing config files. |
+
+### Data Models (if using Pydantic / dataclasses)
 
 ```python
-class CoreProcessor:
-    """High‑level orchestrator for the Galiyaara workflow."""
+from dataclasses import dataclass
+from typing import List, Optional
 
-    def __init__(self, config_path: str, *, verbose: bool = False):
-        """Create a processor instance.\n
-        Parameters\n
-        ----------\n
-        config_path: Path to a YAML/JSON configuration file.\n
-        verbose: Enable detailed logging.
-        """
-
-    def run(self, data: Any) -> Any:
-        """Execute the processing pipeline on *data*.\n
-        Returns the processed result.
-        """
-
-    def reset(self) -> None:
-        """Reset internal state so the processor can be reused."""
+@dataclass
+class ProcessedData:
+    id: str
+    values: List[float]
+    metadata: Optional[dict] = None
 ```
 
-### `galiyaara.utils`
+### Public API Summary (auto‑generated)
 
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `load_json` | `load_json(path: str | Path) -> dict` | Load a JSON file and return a Python dictionary. |
-| `save_json` | `save_json(obj: Any, path: str | Path, *, indent: int = 2) -> None` | Serialize *obj* to a JSON file. |
-| `validate_schema` | `validate_schema(data: dict, schema: dict) -> bool` | Validate *data* against a JSON‑Schema definition. |
-| `log` | `log(message: str, level: str = "INFO") -> None` | Simple wrapper around the standard `logging` module. |
-
-### Exceptions  
-
-| Exception | Description |
-|-----------|-------------|
-| `GaliyaaraError` | Base class for all library‑specific errors. |
-| `ConfigError` | Raised when the configuration file cannot be parsed or is invalid. |
-| `ProcessingError` | Raised when the core processing fails. |
-
-### Type hints & data models  
-
-If you use `pydantic`/`dataclasses`, expose them here:
-
-```python
-from pydantic import BaseModel
-
-class ConfigModel(BaseModel):
-    """Typed representation of the configuration file."""
-    input_path: str
-    output_path: str
-    parameters: dict = {}
+```bash
+# If you use Sphinx + autodoc:
+make html
+# Or with MkDocs:
+mkdocs serve
 ```
 
 ---  
 
 ## Examples  
 
-### 1️⃣ Basic data processing  
+### 1️⃣ Basic workflow (script)
 
 ```python
-from galiyaara import CoreProcessor, utils
+# examples/basic_workflow.py
+from galiyaara import CoreClass, load_config
 
-# Load configuration (YAML, JSON, TOML, …)
-processor = CoreProcessor("examples/config.yaml")
+cfg = load_config("examples/config.yaml")
+client = CoreClass(config_path="examples/config.yaml", verbose=True)
 
-# Load raw data
-raw = utils.load_json("examples/data/raw.json")
-
-# Run the pipeline
-processed = processor.run(raw)
-
-# Persist the result
-utils.save_json(processed, "examples/data/processed.json")
+# Process a list of inputs
+inputs = ["alpha", "beta", "gamma"]
+for item in inputs:
+    out = client.do_something(item)
+    print(f"{item!r} → {out}")
 ```
 
-### 2️⃣ Using the CLI  
+### 2️⃣ Using the CLI in a shell script
 
 ```bash
-# Process a single file
-galiyaara process -c examples/config.yaml examples/data/raw.json -o examples/data/processed.json
+#!/usr/bin/env bash
+# examples/run_batch.sh
 
-# Process an entire directory (recursive)
-galiyaara batch -c examples/config.yaml examples/data/ -o results/
+set -euo pipefail
+
+INPUTS=("file1.txt" "file2.txt" "file3.txt")
+for f in "${INPUTS[@]}"; do
+    echo "Processing $f ..."
+    galiyaara run "$f" --output "results/${f}.out"
+done
 ```
 
-### 3️⃣ Custom extensions  
-
-If Galiyaara is extensible, show how to plug in a custom component:
+### 3️⃣ Integration with a web framework (FastAPI example)
 
 ```python
-from galiyaara.core import CoreProcessor
-from galiyaara.plugins import BasePlugin
+# examples/api_server.py
+from fastapi import FastAPI, HTTPException
+from galiyaara import CoreClass
 
-class MyPlugin(BasePlugin):
-    def transform(self, data):
-        # Custom transformation logic
-        return {k: v * 2 for k, v in data.items()}
+app = FastAPI()
+client = CoreClass(config_path="config.yaml")
 
-processor = CoreProcessor("config.yaml", plugins=[MyPlugin()])
-result = processor.run({"a": 1, "b": 2})
-print(result)   # → {'a': 2, 'b': 4}
+@app.post("/process")
+async def process(payload: dict):
+    try:
+        result = client.do_something(payload["input"])
+        return {"result": result}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 ```
 
-### 4️⃣ Integration with other libraries  
+Run with:
+
+```bash
+uvicorn examples.api_server:app --reload
+```
+
+### 4️⃣ Unit testing pattern (pytest)
 
 ```python
-import pandas as pd
-from galiyaara import CoreProcessor, utils
+# tests/test_core.py
+import pytest
+from galiyaara import CoreClass
 
-# Convert a DataFrame to the format expected by Galiyaara
-df = pd.read_csv("data/input.csv")
-payload = df.to_dict(orient="records")
+@pytest.fixture
+def client(tmp_path):
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text("verbose: true\n")
+    return CoreClass(config_path=str(cfg_path), verbose=True)
 
-processor = CoreProcessor("config.yaml")
-output = processor.run(payload)
+def test_do_something(client):
+    assert client.do_something("test") == "expected_output"
+```
 
-# Back to pandas for further analysis
-df_out = pd.DataFrame(output)
-df_out.to_csv("data/output.csv", index=False)
+Run tests:
+
+```bash
+pytest -v
 ```
 
 ---  
@@ -257,36 +246,41 @@ df_out.to_csv("data/output.csv", index=False)
 ## Contributing  
 
 1. **Fork** the repository.  
-2. Create a **feature branch** (`git checkout -b my‑feature`).  
-3. Write **tests** for any new functionality (`pytest`).  
-4. Keep the **code style** consistent (`ruff` or `flake8`).  
-5. Update the **documentation** (README, API docs, examples).  
-6. Submit a **pull request**.  
+2. **Clone** your fork locally.  
+3. Create a **feature branch** (`git checkout -b feature/awesome-feature`).  
+4. **Write tests** for any new functionality.  
+5. Ensure the test suite passes: `pytest`.  
+6. **Update documentation** (including this README) to reflect your changes.  
+7. Submit a **Pull Request** targeting the `main` (or `develop`) branch.  
 
-> **Development workflow**  
-> ```bash
-> # Install dev dependencies
-> pip install -e .[dev]
-> 
-> # Run the test suite
-> pytest -q
-> 
-> # Lint & format
-> ruff check .
-> ruff format .
-> ```
+### Development dependencies
 
-Please see `CONTRIBUTING.md` for the full guidelines.
+```bash
+pip install -e .[dev,test,docs]
+```
+
+- `dev` – linting (`flake8`, `black`, `isort`)  
+- `test` – testing (`pytest`, `pytest-cov`)  
+- `docs` – documentation (`sphinx`, `mkdocs`, `mkdocstrings`)  
+
+### Code style
+
+- Follow **PEP 8** (or the style guide of your language).  
+- Run `black .` and `isort .` before committing.  
+- Use **type hints** throughout the codebase.  
 
 ---  
 
 ## License  
 
-`Galiyaara` is released under the **MIT License** (or whichever license you choose). See the `LICENSE` file for the full text.
+```
+[TODO: Insert license text, e.g., MIT, Apache 2.0, GPL‑3.0, etc.]
+```
+
+If you are unsure which license to choose, see https://choosealicense.com/.
 
 ---  
 
-## Support  
+## Contact & Support  
 
-* **Issues:** Open a ticket on the GitHub Issues page.  
-* **Discussions:** Use the repository’s
+- **Maintainer:** *
