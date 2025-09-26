@@ -1,8 +1,7 @@
 # Galiyaara  
-*Repository name:* **Galiyaara**  
-*Description:* *None*  
 
-> **NOTE:** This documentation is a template that can be customized once the actual purpose, features, and codebase of **Galiyaara** are defined. Replace the placeholder text (marked with `TODO`) with concrete information about the project.
+*Repository name:* **Galiyaara**  
+*Description:* *(No description provided – please add a brief overview of what the project does.)*  
 
 ---  
 
@@ -19,226 +18,235 @@
 
 ## Installation  
 
-### Prerequisites
-| Tool | Minimum Version | Why? |
-|------|-----------------|------|
-| **Python** | 3.8+ | Core language runtime |
-| **pip** | 20.0+ | Package manager |
-| **Git** | 2.20+ | To clone the repository |
-| **[Optional]** | | Any additional system‑level dependencies (e.g., `ffmpeg`, `libmagic`, `node`, etc.) |
+> **Note:** The instructions below assume that Galiyaara is a Python package.  
+> If the project uses a different language or runtime, replace the relevant commands with the appropriate ones.
 
-> **If Galiyaara is not a Python project, replace the above table with the appropriate language/runtime requirements (e.g., Node.js, Java, Rust, etc.).**
+### 1. Prerequisites  
 
-### Installing from PyPI (if published)
+| Tool | Minimum Version | How to Install |
+|------|----------------|----------------|
+| **Python** | 3.8+ | `python -V` (or `python3 -V`) |
+| **pip** | 20.0+ | `python -m ensurepip --upgrade` |
+| **Git** | any | `git --version` |
+| **Virtualenv** (optional but recommended) | any | `pip install virtualenv` |
+
+### 2. Install from PyPI (recommended)  
+
+If Galiyaara is published on PyPI:
 
 ```bash
 pip install galiyaara
 ```
 
-### Installing from source
+### 3. Install from source  
 
 ```bash
-# 1️⃣ Clone the repository
-git clone https://github.com/<your‑org-or‑user>/Galiyaara.git
+# Clone the repository
+git clone https://github.com/<your‑username>/Galiyaara.git
 cd Galiyaara
 
-# 2️⃣ Create a virtual environment (recommended)
+# (Optional) Create and activate a virtual environment
 python -m venv .venv
-source .venv/bin/activate   # On Windows: .venv\Scripts\activate
+# Windows
+.\.venv\Scripts\activate
+# macOS / Linux
+source .venv/bin/activate
 
-# 3️⃣ Install the package in editable mode
+# Install the package in editable mode (useful for development)
 pip install -e .
 ```
 
-### Installing optional extras
-
-If the project ships with optional feature sets (e.g., `dev`, `test`, `docs`), they can be installed via extras:
+### 4. Verify the installation  
 
 ```bash
-pip install -e .[dev,test,docs]
+python -c "import galiyaara; print(galiyaara.__version__)"
 ```
 
-> **Tip:** Run `pip list` after installation to verify that `galiyaara` appears in the environment.
+You should see the current version printed without errors.
 
 ---  
 
 ## Quick Start / Usage  
 
-Below is a minimal “Hello‑World” style snippet that demonstrates the most common entry point of **Galiyaara**. Replace the placeholder code with the real API calls once they are defined.
+Below is a minimal example that demonstrates how to import and use the core functionality of Galiyaara. Replace the placeholder code with the actual API calls once they are defined.
 
 ```python
 # example_usage.py
-from galiyaara import CoreClass   # TODO: replace with actual import(s)
+import galiyaara
 
 def main():
-    # Initialise the main object (adjust arguments as needed)
-    client = CoreClass(
-        config_path="config.yaml",   # TODO: describe required config
-        verbose=True
-    )
+    # Initialize the main class (replace `MainProcessor` with the real entry point)
+    processor = galiyaara.MainProcessor(config_path="config.yaml")
 
-    # Perform a basic operation
-    result = client.do_something("sample input")
+    # Run a simple operation (replace `process` with the real method)
+    result = processor.process(data="sample input")
+
+    # Print or otherwise handle the result
     print("Result:", result)
 
 if __name__ == "__main__":
     main()
 ```
 
-### Running the example
+Run the script:
 
 ```bash
 python example_usage.py
 ```
 
-### Command‑line interface (CLI)
+### Command‑line interface (if provided)
 
-If **Galiyaara** provides a CLI, the typical entry point will look like:
+If Galiyaara ships a CLI tool called `galiyaara-cli`, you can invoke it directly:
 
 ```bash
-galiyaara --help
+# Show help
+galiyaara-cli --help
+
+# Example command
+galiyaara-cli run --input data/input.txt --output results/output.json
 ```
-
-Sample sub‑commands (replace with real ones):
-
-| Command | Description |
-|---------|-------------|
-| `galiyaara run <input>` | Executes the primary workflow on `<input>`. |
-| `galiyaara serve` | Starts a local HTTP server (if applicable). |
-| `galiyaara config set <key> <value>` | Updates configuration values. |
 
 ---  
 
 ## API Documentation  
 
-> **Tip:** Generate up‑to‑date API docs automatically with tools like **Sphinx**, **MkDocs**, or **Typedoc** (for TypeScript). The sections below are placeholders; fill them with real signatures, type hints, and descriptions.
+> **Tip:** Keep this section up‑to‑date automatically using tools such as **Sphinx**, **MkDocs**, or **pdoc**. The snippets below are placeholders that you should replace with the actual signatures and docstrings.
 
-### Core Modules  
-
-#### `galiyaara.core`
-| Class / Function | Purpose | Signature | Returns |
-|------------------|---------|-----------|---------|
-| `CoreClass` | Main entry point for the library. | `CoreClass(config_path: str, verbose: bool = False)` | Instance of `CoreClass`. |
-| `process_data` | Utility to transform raw data. | `process_data(data: Any, *, mode: str = "default") -> ProcessedData` | `ProcessedData` object. |
-| `VERSION` | Library version string. | `VERSION: str` | e.g., `"1.2.3"` |
-
-#### `galiyaara.utils`
-| Function | Purpose | Signature | Returns |
-|----------|---------|-----------|---------|
-| `load_config` | Reads a YAML/JSON config file. | `load_config(path: str) -> dict` | Configuration dictionary. |
-| `save_results` | Persists results to disk. | `save_results(data: Any, path: str) -> None` | — |
-| `logger` | Configured logger instance. | `logger(name: str = "galiyaara") -> logging.Logger` | Logger object. |
-
-#### `galiyaara.exceptions`
-| Exception | When it is raised |
-|-----------|-------------------|
-| `GaliyaaraError` | Base class for all custom errors. |
-| `InvalidInputError` | Input validation fails. |
-| `ConfigurationError` | Problems loading or parsing config files. |
-
-### Data Models (if using Pydantic / dataclasses)
+### `galiyaara.__init__`
 
 ```python
-from dataclasses import dataclass
-from typing import List, Optional
+__version__: str
+```
+*Current version of the library.*
 
-@dataclass
-class ProcessedData:
-    id: str
-    values: List[float]
-    metadata: Optional[dict] = None
+---
+
+### `galiyaara.MainProcessor`
+
+```python
+class MainProcessor:
+    """
+    Core class that orchestrates the primary workflow of Galiyaara.
+
+    Parameters
+    ----------
+    config_path : str, optional
+        Path to a YAML/JSON configuration file. If omitted, defaults are used.
+    """
+
+    def __init__(self, config_path: str | None = None) -> None: ...
+
+    def process(self, data: Any) -> Any:
+        """
+        Process the supplied data and return the result.
+
+        Parameters
+        ----------
+        data : Any
+            Input data (could be a string, dict, pandas DataFrame, etc.)
+
+        Returns
+        -------
+        Any
+            Processed output.
+        """
+        ...
+
+    def reset(self) -> None:
+        """Reset internal state to the initial configuration."""
+        ...
+
+    # Add any additional public methods here
 ```
 
-### Public API Summary (auto‑generated)
+---
 
-```bash
-# If you use Sphinx + autodoc:
-make html
-# Or with MkDocs:
-mkdocs serve
-```
+### Utility Functions  
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `galiyaara.utils.load_config(path: str) -> dict` | Load a YAML/JSON configuration file. | `cfg = load_config("config.yaml")` |
+| `galiyaara.utils.validate_input(data: Any) -> bool` | Validate the shape/type of input data. | `if not validate_input(data): raise ValueError(...)` |
+| `galiyaara.utils.save_output(output: Any, path: str) -> None` | Serialize and write output to disk. | `save_output(result, "out.json")` |
+
+*(Add more utilities as needed.)*
+
+---
+
+### Exceptions  
+
+| Exception | When it is raised |
+|-----------|-------------------|
+| `galiyaara.errors.GaliyaaraError` | Base class for all custom errors. |
+| `galiyaara.errors.ConfigurationError` | Problems loading or parsing the config file. |
+| `galiyaara.errors.ValidationError` | Input data does not meet required schema. |
+| `galiyaara.errors.ProcessingError` | Unexpected error during `process`. |
 
 ---  
 
 ## Examples  
 
-### 1️⃣ Basic workflow (script)
+### 1. Basic data processing  
 
 ```python
-# examples/basic_workflow.py
-from galiyaara import CoreClass, load_config
+from galiyaara import MainProcessor
 
-cfg = load_config("examples/config.yaml")
-client = CoreClass(config_path="examples/config.yaml", verbose=True)
+processor = MainProcessor()
+raw_data = {"name": "Alice", "age": 30}
+cleaned = processor.process(raw_data)
 
-# Process a list of inputs
-inputs = ["alpha", "beta", "gamma"]
-for item in inputs:
-    out = client.do_something(item)
-    print(f"{item!r} → {out}")
+print(cleaned)
+# Expected output (example):
+# {'name': 'Alice', 'age': 30, 'status': 'processed'}
 ```
 
-### 2️⃣ Using the CLI in a shell script
-
-```bash
-#!/usr/bin/env bash
-# examples/run_batch.sh
-
-set -euo pipefail
-
-INPUTS=("file1.txt" "file2.txt" "file3.txt")
-for f in "${INPUTS[@]}"; do
-    echo "Processing $f ..."
-    galiyaara run "$f" --output "results/${f}.out"
-done
-```
-
-### 3️⃣ Integration with a web framework (FastAPI example)
+### 2. Using a custom configuration file  
 
 ```python
-# examples/api_server.py
-from fastapi import FastAPI, HTTPException
-from galiyaara import CoreClass
-
-app = FastAPI()
-client = CoreClass(config_path="config.yaml")
-
-@app.post("/process")
-async def process(payload: dict):
-    try:
-        result = client.do_something(payload["input"])
-        return {"result": result}
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+processor = MainProcessor(config_path="configs/custom.yaml")
+result = processor.process(data="some input")
+print(result)
 ```
 
-Run with:
-
-```bash
-uvicorn examples.api_server:app --reload
-```
-
-### 4️⃣ Unit testing pattern (pytest)
+### 3. Batch processing with a CSV file  
 
 ```python
-# tests/test_core.py
-import pytest
-from galiyaara import CoreClass
+import pandas as pd
+from galiyaara import MainProcessor
 
-@pytest.fixture
-def client(tmp_path):
-    cfg_path = tmp_path / "config.yaml"
-    cfg_path.write_text("verbose: true\n")
-    return CoreClass(config_path=str(cfg_path), verbose=True)
+df = pd.read_csv("data/batch_input.csv")
+processor = MainProcessor()
 
-def test_do_something(client):
-    assert client.do_something("test") == "expected_output"
+def process_row(row):
+    return processor.process(row.to_dict())
+
+df["result"] = df.apply(process_row, axis=1)
+df.to_csv("data/batch_output.csv", index=False)
 ```
 
-Run tests:
+### 4. Command‑line usage (CLI)  
 
 ```bash
-pytest -v
+# Process a single file
+galiyaara-cli run --input data/input.txt --output data/output.json
+
+# Process a whole directory
+galiyaara-cli batch --src data/raw/ --dst data/processed/
+```
+
+### 5. Integrating with other libraries  
+
+```python
+import matplotlib.pyplot as plt
+from galiyaara import MainProcessor
+
+processor = MainProcessor()
+data = {"x": [1, 2, 3], "y": [4, 5, 6]}
+processed = processor.process(data)
+
+plt.plot(processed["x"], processed["y"])
+plt.title("Processed Data")
+plt.show()
 ```
 
 ---  
@@ -246,41 +254,45 @@ pytest -v
 ## Contributing  
 
 1. **Fork** the repository.  
-2. **Clone** your fork locally.  
-3. Create a **feature branch** (`git checkout -b feature/awesome-feature`).  
-4. **Write tests** for any new functionality.  
-5. Ensure the test suite passes: `pytest`.  
-6. **Update documentation** (including this README) to reflect your changes.  
-7. Submit a **Pull Request** targeting the `main` (or `develop`) branch.  
+2. **Clone** your fork locally: `git clone https://github.com/<your‑username>/Galiyaara.git`  
+3. **Create a new branch** for your feature or bug‑fix: `git checkout -b my-feature`  
+4. **Make changes** and **add tests** where appropriate.  
+5. **Run the test suite**: `pytest` (or the command you use).  
+6. **Commit** with a clear message and **push** to your fork.  
+7. Open a **Pull Request** against the `main` branch of the upstream repo.  
 
-### Development dependencies
+### Development dependencies  
 
 ```bash
-pip install -e .[dev,test,docs]
+pip install -e .[dev]   # Assuming extras_require includes "dev": ["pytest", "black", "flake8", ...]
 ```
 
-- `dev` – linting (`flake8`, `black`, `isort`)  
-- `test` – testing (`pytest`, `pytest-cov`)  
-- `docs` – documentation (`sphinx`, `mkdocs`, `mkdocstrings`)  
+### Code style  
 
-### Code style
-
-- Follow **PEP 8** (or the style guide of your language).  
-- Run `black .` and `isort .` before committing.  
-- Use **type hints** throughout the codebase.  
+- Follow **PEP 8** (or the style guide you adopt).  
+- Run `black .` and `flake8` before committing.  
 
 ---  
 
 ## License  
 
-```
-[TODO: Insert license text, e.g., MIT, Apache 2.0, GPL‑3.0, etc.]
-```
+*Specify the license here (e.g., MIT, Apache‑2.0, GPL‑3.0, etc.).*  
 
-If you are unsure which license to choose, see https://choosealicense.com/.
+```text
+MIT License
+
+Copyright (c) <year> <author>
+...
+```
 
 ---  
 
 ## Contact & Support  
 
-- **Maintainer:** *
+- **Issue Tracker:** <https://github.com/<your‑username>/Galiyaara/issues>  
+- **Email:** <your.email@example.com>  
+- **Chat / Community:** *(e.g., Gitter, Discord, Slack – add a link if you have one)*  
+
+---  
+
+*This README was generated as a template. Replace all placeholder text (e.g., `<your‑username>`, `<author>`, version numbers, function signatures, etc.) with the actual information for the Galiyaara project.*
