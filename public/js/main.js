@@ -1,0 +1,204 @@
+/**
+ * Galiyaara — page wiring.
+ *
+ * Reads photos.json (written by tools/build.mjs from whatever is sitting in
+ * photos/), hands it to the corridor, and keeps the flat HTML index in sync
+ * with it. Adding a photograph never means editing this file.
+ */
+import { createGallery } from './gallery.js';
+
+const $ = (sel) => document.querySelector(sel);
+const body = document.body;
+
+const HIGHLIGHTS = ['manikarnika', 'banars', 'ghat', 'first-lesson'];
+
+// ── Typewriter (the one flourish the old site had, kept, minus the library) ──
+function typewriter(el, lines) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    el.textContent = lines[0];
+    return;
+  }
+  let li = 0, ci = 0, erasing = false;
+  (function step() {
+    const line = lines[li];
+    ci += erasing ? -1 : 1;
+    el.textContent = line.slice(0, ci);
+    let wait = erasing ? 34 : 62;
+    if (!erasing && ci === line.length) { erasing = true; wait = 2100; }
+    else if (erasing && ci === 0) { erasing = false; li = (li + 1) % lines.length; wait = 380; }
+    setTimeout(step, wait);
+  })();
+}
+
+// ── Boot ────────────────────────────────────────────────────────────────────
+async function boot() {
+  typewriter($('#type'), [
+    'Hello, World!!',
+    'I click photographs.',
+    'Come walk the corridor.',
+  ]);
+
+  let photos = [];
+  try {
+    const res = await fetch('photos.json', { cache: 'no-cache' });
+    if (!res.ok) throw new Error(res.status);
+    photos = (await res.json()).photos || [];
+  } catch (err) {
+    console.error('Could not read photos.json — run `npm run build`.', err);
+  }
+  if (!photos.length) {
+    $('#boot .boot-note').textContent = 'no photographs found';
+    return;
+  }
+
+  buildIndex(photos);
+  const gallery = createGallery($('#stage'), photos, hooks(photos));
+  wire(gallery);
+  requestAnimationFrame(() => body.classList.add('ready'));
+}
+
+// ── The flat index (also the no-WebGL fallback and the a11y path) ───────────
+function buildIndex(photos) {
+  // Titles come from filenames and captions.json, so they go in as text nodes
+  // rather than markup.
+  const tile = (p, i) => {
+    const el = document.createElement('button');
+    el.className = 'tile reveal';
+    el.type = 'button';
+    el.dataset.index = i;
+
+    const img = document.createElement('img');
+    Object.assign(img, { src: p.thumb, alt: p.title, loading: 'lazy', decoding: 'async' });
+
+    const cap = document.createElement('figcaption');
+    cap.textContent = p.title;
+    cap.setAttribute('aria-hidden', 'true');   // the img alt already says this
+
+    el.append(img, cap);
+    return el;
+  };
+
+  const grid = $('#grid');
+  photos.forEach((p, i) => grid.append(tile(p, i)));
+  $('#count').textContent = String(photos.length).padStart(2, '0');
+
+  const picks = HIGHLIGHTS
+    .map((slug) => photos.findIndex((p) => p.slug === slug))
+    .filter((i) => i >= 0);
+  while (picks.length < 4) picks.push(picks.length);
+  $('#highlights').append(...picks.map((i) => tile(photos[i], i)));
+}
+
+// ── Corridor → page ─────────────────────────────────────────────────────────
+function hooks(photos) {
+  const now = $('#hud-now').querySelector('strong');
+  return {
+    onPass(photo) { now.textContent = photo ? photo.title : ''; },
+    onMode(mode) { setMode(mode === 'roam'); },
+    onFocus(photo, i) {
+      body.classList.toggle('plated', !!photo);
+      $('#plate').setAttribute('aria-hidden', photo ? 'false' : 'true');
+      if (!photo) return;
+      $('#plate-num').textContent = `${String(i + 1).padStart(2, '0')} / ${photos.length}`;
+      $('#plate-title').textContent = photo.title;
+      $('#plate-caption').textContent = photo.caption || '';
+      $('#plate-caption').hidden = !photo.caption;
+    },
+  };
+}
+
+let scrollY = 0;
+function setMode(immersive) {
+  body.dataset.mode = immersive ? 'immersive' : 'page';
+  $('#hud').setAttribute('aria-hidden', String(!immersive));
+  if (immersive) {
+    scrollY = window.scrollY;
+    body.style.top = `-${scrollY}px`;
+    body.style.position = 'fixed';
+    body.style.width = '100%';
+  } else if (body.style.position === 'fixed') {
+    body.style.position = body.style.top = body.style.width = '';
+    window.scrollTo({ top: scrollY, behavior: 'instant' });
+  }
+}
+
+// ── Page → corridor ─────────────────────────────────────────────────────────
+function wire(gallery) {
+  const enter = () => gallery.setMode('roam');
+
+  document.querySelectorAll('[data-enter]').forEach((b) => b.addEventListener('click', enter));
+  $('#hud-exit').addEventListener('click', () => gallery.setMode('page'));
+  $('#plate-close').addEventListener('click', () => gallery.unfocus());
+  $('#plate-prev').addEventListener('click', () => gallery.prev());
+  $('#plate-next').addEventListener('click', () => gallery.next());
+
+  document.addEventListener('click', (e) => {
+    const tile = e.target.closest('.tile');
+    if (tile) gallery.jumpTo(Number(tile.dataset.index));
+  });
+
+  // Scroll drives the camera down the corridor while the page is showing.
+  const onScroll = () => {
+    const max = document.documentElement.scrollHeight - innerHeight;
+    gallery.setScroll(max > 0 ? window.scrollY / max : 0);
+  };
+  addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  // Menu
+  const toggle = $('#nav-toggle');
+  toggle.addEventListener('click', () => {
+    const open = body.classList.toggle('menu');
+    toggle.setAttribute('aria-expanded', String(open));
+  });
+  $('#nav').addEventListener('click', (e) => {
+    if (e.target.tagName === 'A') body.classList.remove('menu');
+  });
+
+  // Reveal
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+    }
+  }, { rootMargin: '0px 0px -8% 0px' });
+  document.querySelectorAll('.reveal, .wrap > *').forEach((el, i) => {
+    el.classList.add('reveal');
+    el.style.transitionDelay = `${Math.min(i, 6) * 45}ms`;
+    io.observe(el);
+  });
+
+  touchStick(gallery);
+}
+
+// ── Virtual stick for touch ─────────────────────────────────────────────────
+function touchStick(gallery) {
+  const pad = $('#joy');
+  const nub = pad.querySelector('i');
+  const R = 34;
+  let id = null;
+
+  const set = (x, y) => {
+    nub.style.transform = `translate(${x * R}px, ${y * R}px)`;
+    gallery.setStick(x, -y);
+  };
+
+  pad.addEventListener('pointerdown', (e) => {
+    id = e.pointerId;
+    pad.setPointerCapture(id);
+    e.preventDefault();
+  });
+  pad.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== id) return;
+    const r = pad.getBoundingClientRect();
+    let x = (e.clientX - r.left - r.width / 2) / (r.width / 2);
+    let y = (e.clientY - r.top - r.height / 2) / (r.height / 2);
+    const len = Math.hypot(x, y);
+    if (len > 1) { x /= len; y /= len; }
+    set(x, y);
+  });
+  const end = (e) => { if (e.pointerId === id) { id = null; set(0, 0); } };
+  pad.addEventListener('pointerup', end);
+  pad.addEventListener('pointercancel', end);
+}
+
+boot();
