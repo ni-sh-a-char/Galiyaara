@@ -33,9 +33,11 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(ROOT, 'photos');
 const CURATION = path.join(SRC, 'curation.json');
 
-const CONCURRENCY = 2;  // free tiers rate-limit hard; two at a time is polite
-const LOOK_PX = 512;    // what the model is shown — enough to describe, cheap to send
+const CONCURRENCY = 2;     // free tiers rate-limit hard; two at a time is polite
+const LOOK_PX = 512;       // what the model is shown — enough to describe, cheap to send
 const WALKS = 5;
+const REQ_TIMEOUT = 90000; // a hung socket must not stall a CI job forever
+const MAX_BACKOFF = 60;    // seconds we are willing to sit out a 429
 
 const hash = (buf) => createHash('sha1').update(buf).digest('hex').slice(0, 16);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -108,6 +110,9 @@ export function pickProvider(env = process.env) {
  * 429 is the normal case here, not an exception — honour Retry-After when it is
  * offered and back off when it is not.
  */
+/** The free tier's daily allowance is gone. Not an error — just "tomorrow". */
+export class OutOfQuota extends Error {}
+
 async function chat(provider, messages, { maxTokens = 1200, tries = 5 } = {}) {
   for (let attempt = 0; ; attempt++) {
     let res;
@@ -125,6 +130,7 @@ async function chat(provider, messages, { maxTokens = 1200, tries = 5 } = {}) {
           max_tokens: maxTokens,
           temperature: 0.6,
         }),
+        signal: AbortSignal.timeout(REQ_TIMEOUT),
       });
     } catch (err) {
       if (attempt >= tries - 1) throw err;
@@ -139,11 +145,19 @@ async function chat(provider, messages, { maxTokens = 1200, tries = 5 } = {}) {
       return text;
     }
 
+    const after = Number(res.headers.get('retry-after'));
+
+    // A Retry-After measured in minutes or hours is not a burst limit — it is
+    // the daily quota saying come back tomorrow. Sleeping through that would
+    // hang CI for hours (it did), so stop and keep what we already have.
+    if (res.status === 429 && Number.isFinite(after) && after > MAX_BACKOFF) {
+      throw new OutOfQuota(`${provider.label} daily quota reached — it asked for ${Math.round(after / 60)} min`);
+    }
+
     const retryable = res.status === 429 || res.status >= 500;
     if (!retryable || attempt >= tries - 1) {
       throw new Error(`${res.status} ${res.statusText}: ${(await res.text()).slice(0, 240)}`);
     }
-    const after = Number(res.headers.get('retry-after'));
     await sleep(Number.isFinite(after) && after > 0 ? after * 1000 : 2000 * 2 ** attempt);
   }
 }
@@ -334,6 +348,8 @@ async function pool(n, items, fn) {
 export const hangKeyOf = (entries) =>
   hash(Buffer.from(entries.map((e) => `${e.slug}:${e.mood}:${(e.tags || []).join(',')}`).sort().join('|')));
 
+const save = (curation) => writeFile(CURATION, JSON.stringify(curation, null, 1) + '\n');
+
 export async function loadCuration(file = CURATION) {
   try {
     return JSON.parse(await readFile(file, 'utf8'));
@@ -344,6 +360,7 @@ export async function loadCuration(file = CURATION) {
 
 async function main() {
   const force = process.argv.includes('--force');
+  let quotaGone = false;
   const provider = pickProvider();
   console.log(`curating via ${provider.label} — ${provider.model}`);
 
@@ -386,12 +403,23 @@ async function main() {
     console.log(`looking at ${todo.length} photograph${todo.length === 1 ? '' : 's'}…`);
     let done = 0;
     const failures = [];
+
     await pool(CONCURRENCY, todo, async (p) => {
+      if (quotaGone) return;              // no point queueing more of the same
       try {
         const meta = await describe(provider, path.join(SRC, p.file), p.file, titleize(p.slug));
         curation.photos[p.slug] = { stamp: p.stamp, ...meta };
+        // Save as we go. A free tier will not get through a hundred
+        // photographs in one day, and an interrupted run must not throw away
+        // the ones it did manage — the next run picks up where this stopped.
+        await save(curation);
         console.log(`  ${(++done).toString().padStart(3)}/${todo.length}  ${p.slug} — "${meta.title}"`);
       } catch (err) {
+        if (err instanceof OutOfQuota) {
+          if (!quotaGone) console.warn(`  …  ${err.message}. Stopping here; run again later to continue.`);
+          quotaGone = true;
+          return;
+        }
         // One bad photograph must not lose the other 102. It simply stays
         // uncurated and falls back to its filename title.
         failures.push(err.message);
@@ -399,10 +427,15 @@ async function main() {
       }
     });
 
-    // Every single one failing is not "nothing to curate", it is a broken key,
-    // a wrong model id, or a provider outage. Say so and fail, rather than
-    // quietly deploying an uncurated site forever.
-    if (!done && failures.length) {
+    const left = todo.length - done;
+    if (quotaGone) {
+      console.log(`  ${done} curated this run, ${left} still to do — the daily allowance resets, so just run it again.`);
+    }
+
+    // Nothing succeeded and it was not a quota wall: that is a broken key, a
+    // wrong model id, or an outage. Fail loudly rather than quietly deploying
+    // an uncurated site forever.
+    if (!done && !quotaGone && failures.length) {
       throw new Error(
         `all ${failures.length} request(s) to ${provider.label} failed. First error:\n`
         + `    ${failures[0]}\n`
@@ -417,7 +450,8 @@ async function main() {
     .map((p) => ({ slug: p.slug, ...curation.photos[p.slug] }));
   const key = hangKeyOf(entries);
 
-  if (entries.length && (force || key !== curation.hangKey)) {
+  // No point re-hanging a show that is still half-written.
+  if (entries.length && !quotaGone && (force || key !== curation.hangKey)) {
     console.log(`hanging the show — ${entries.length} photographs…`);
     try {
       const show = reconcileShow(await hangShow(provider, entries), entries.map((e) => e.slug));
@@ -433,7 +467,7 @@ async function main() {
     }
   }
 
-  await writeFile(CURATION, JSON.stringify(curation, null, 1) + '\n');
+  await save(curation);
   console.log(`wrote ${path.relative(ROOT, CURATION)} — commit it so nobody looks at these twice`);
 }
 
