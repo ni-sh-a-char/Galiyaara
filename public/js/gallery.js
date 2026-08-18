@@ -439,6 +439,43 @@ export function createGallery(canvas, photos, hooks = {}) {
 
   const dock = { pos: new THREE.Vector3(), yaw: 0, pitch: 0, active: false };
 
+  // A guided walk: a route the curator picked, played back frame by frame.
+  const HOLD = 7.5;   // seconds in front of each photograph before moving on
+  let tour = null;    // { title, stops: number[], at: number, playing: bool, held: number }
+
+  const bySlug = new Map(artworks.map((a, i) => [a.photo.slug, i]));
+
+  function reportTour() {
+    hooks.onTour?.(tour && {
+      title: tour.title, at: tour.at, total: tour.stops.length, playing: tour.playing,
+    });
+  }
+
+  function startTour(walk) {
+    const stops = walk.slugs.map((s) => bySlug.get(s)).filter((i) => i !== undefined);
+    if (!stops.length) return;
+    tour = { title: walk.title, stops, at: 0, playing: true, held: 0 };
+    if (mode !== 'roam') setMode('roam');
+    focus(stops[0]);
+    reportTour();
+  }
+
+  function stepTour(delta) {
+    if (!tour) return;
+    const at = tour.at + delta;
+    if (at < 0 || at >= tour.stops.length) return endTour();
+    tour.at = at;
+    tour.held = 0;
+    focus(tour.stops[at]);
+    reportTour();
+  }
+
+  function endTour() {
+    if (!tour) return;
+    tour = null;
+    reportTour();
+  }
+
   function dockAt(i) {
     const a = artworks[i];
     // Far enough back that the long edge fits the frustum, then turn to face
@@ -459,6 +496,7 @@ export function createGallery(canvas, photos, hooks = {}) {
   }
 
   function unfocus() {
+    endTour();
     if (focused === null) return;
     const a = artworks[focused];
     camera.position.set(0, EYE, a.z + 0.6);
@@ -511,6 +549,7 @@ export function createGallery(canvas, photos, hooks = {}) {
     const hit = raycaster.intersectObjects(pickables, false)[0];
     if (hit) {
       if (mode === 'page') setMode('roam');
+      endTour();
       focus(hit.object.userData.index);
     } else if (focused !== null) {
       unfocus();
@@ -532,8 +571,17 @@ export function createGallery(canvas, photos, hooks = {}) {
     }
     if (mode !== 'roam') return;
     if (focused !== null) {
-      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') focus(focused + 1);
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') focus(focused - 1);
+      const fwd = e.key === 'ArrowRight' || e.key === 'ArrowDown';
+      const back = e.key === 'ArrowLeft' || e.key === 'ArrowUp';
+      if (e.code === 'Space' && tour) {
+        tour.playing = !tour.playing;
+        reportTour();
+        e.preventDefault();
+        return;
+      }
+      if (tour) { if (fwd) stepTour(1); if (back) stepTour(-1); return; }
+      if (fwd) focus(focused + 1);
+      if (back) focus(focused - 1);
       return;
     }
     keys.add(e.code);
@@ -592,6 +640,16 @@ export function createGallery(canvas, photos, hooks = {}) {
       camera.position.y = lerp(camera.position.y, EYE + pointer.y * 0.16 + (reduced ? 0 : Math.sin(drift * 1.6) * 0.02), ease(dt, 2));
       yaw = lerp(yaw, -pointer.x * 0.16, ease(dt, 2));
       pitch = lerp(pitch, pointer.y * 0.08, ease(dt, 2));
+    }
+
+    // Hold in front of each stop, but only once the camera has actually settled
+    // there — otherwise a slow dock eats into the time you get to look at it.
+    if (tour && tour.playing && focused !== null) {
+      if (camera.position.distanceTo(dock.pos) < 0.25) tour.held += dt;
+      if (tour.held >= HOLD) {
+        if (tour.at + 1 >= tour.stops.length) endTour();
+        else stepTour(1);
+      }
     }
 
     camera.rotation.set(pitch, yaw, 0);
@@ -655,16 +713,21 @@ export function createGallery(canvas, photos, hooks = {}) {
     getMode: () => mode,
     focus,
     unfocus,
-    next: () => focus(focused === null ? 0 : focused + 1),
-    prev: () => focus(focused === null ? 0 : focused - 1),
+    next: () => (tour ? stepTour(1) : focus(focused === null ? 0 : focused + 1)),
+    prev: () => (tour ? stepTour(-1) : focus(focused === null ? 0 : focused - 1)),
     /** Drop the camera straight to an artwork without the walk. */
     jumpTo(i) {
+      endTour();
       const a = artworks[clamp(i, 0, artworks.length - 1)];
       camera.position.set(0, EYE, a.z + 5);
       setMode('roam');
       focus(i);
     },
     setScroll: (t) => { scrollT = clamp(t, 0, 1); },
+    startTour,
+    stepTour,
+    endTour,
+    toggleTour() { if (tour) { tour.playing = !tour.playing; reportTour(); } },
     setStick: (x, y) => { stick.x = x; stick.y = y; },
     count: artworks.length,
     dispose() { running = false; renderer.dispose(); },

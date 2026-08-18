@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write   # the curator commits photos/curation.json back
   pages: write
   id-token: write
 
@@ -27,6 +27,28 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      # Claude looks at any newly-added photograph once and writes its title,
+      # caption, alt text and tags, then re-hangs the show. The result is
+      # committed back, so it is paid for once and inherited by every fork.
+      # Without the secret this step is a no-op and the build falls back to
+      # filename titles — a fork with no key still deploys.
+      - name: Curate new photographs
+        if: github.repository == 'ni-sh-a-char/Galiyaara'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: npm run curate
+
+      - name: Commit the curation
+        if: github.repository == 'ni-sh-a-char/Galiyaara'
+        run: |
+          if [ -n "$(git status --porcelain photos/curation.json)" ]; then
+            git config user.name  "galiyaara-curator[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add photos/curation.json
+            git commit -m "Curate new photographs [skip ci]"
+            git push
+          fi
 
       # Skip re-encoding photographs that haven't changed since the last deploy.
       - uses: actions/cache@v4

@@ -12,6 +12,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
+import { loadCuration } from './curate.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(ROOT, 'photos');
@@ -56,6 +57,26 @@ function meanHex(stats) {
   return '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('');
 }
 
+/**
+ * Where a photograph's words come from, most trusted first:
+ *   1. photos/captions.json  — written by hand, always wins
+ *   2. photos/curation.json  — written by Claude at build time (tools/curate.mjs)
+ *   3. the filename          — always available, so the site never depends on either
+ */
+export function resolveMeta(slug, filename, captions, curation) {
+  const hand = captions[filename] || captions[slug] || {};
+  const ai = curation.photos?.[slug] || {};
+  const title = hand.title || ai.title || titleize(slug);
+  return {
+    title,
+    caption: hand.caption ?? ai.caption ?? '',
+    alt: hand.alt || ai.alt || title,
+    tags: hand.tags || ai.tags || [],
+    mood: hand.mood || ai.mood || '',
+    curated: !hand.title && !!ai.title,
+  };
+}
+
 async function loadCaptions() {
   try {
     const raw = JSON.parse(await readFile(path.join(SRC, 'captions.json'), 'utf8'));
@@ -71,6 +92,7 @@ async function loadCaptions() {
 async function main() {
   const t0 = Date.now();
   const captions = await loadCaptions();
+  const curation = await loadCuration(path.join(SRC, 'curation.json'));
 
   // 1. The static site, verbatim.
   await mkdir(OUT, { recursive: true });
@@ -115,12 +137,10 @@ async function main() {
 
     const img = sharp(thumb);
     const [meta, stats] = await Promise.all([img.metadata(), img.stats()]);
-    const meta_ = captions[file] || captions[slug] || {};
 
     photos.push({
       slug,
-      title: meta_.title || titleize(slug),
-      caption: meta_.caption || '',
+      ...resolveMeta(slug, file, captions, curation),
       thumb: `photos/thumb/${slug}.jpg`,
       large: `photos/large/${slug}.jpg`,
       w: meta.width,
@@ -129,7 +149,19 @@ async function main() {
     });
   }
 
-  await writeFile(path.join(OUT, 'photos.json'), JSON.stringify({ photos }, null, 1));
+  // The curator's hang order, when there is one. Anything it doesn't mention
+  // (a photograph added since the last curation run) keeps its alphabetical
+  // place at the end rather than disappearing.
+  const hang = curation.hang?.length ? curation.hang : [];
+  const rank = new Map(hang.map((slug, i) => [slug, i]));
+  photos.sort((a, b) => (rank.get(a.slug) ?? Infinity) - (rank.get(b.slug) ?? Infinity));
+
+  const bySlug = new Set(photos.map((p) => p.slug));
+  const walks = (curation.walks || [])
+    .map((w) => ({ ...w, slugs: w.slugs.filter((s) => bySlug.has(s)) }))
+    .filter((w) => w.slugs.length >= 3);
+
+  await writeFile(path.join(OUT, 'photos.json'), JSON.stringify({ photos, walks }, null, 1));
   await writeFile(indexFile, JSON.stringify(next));
 
   // Derivatives of photographs that have since been deleted are dead weight.
@@ -146,7 +178,9 @@ async function main() {
     .jpeg({ quality: 84, mozjpeg: true }).toFile(path.join(OUT, 'assets', 'og.jpg'));
 
   console.log(
-    `dist/ ready — ${photos.length} photographs (${built} rendered, ${photos.length - built} cached) in ${((Date.now() - t0) / 1000).toFixed(1)}s`
+    `dist/ ready — ${photos.length} photographs (${built} rendered, ${photos.length - built} cached), `
+    + `${photos.filter((p) => p.curated).length} curated, ${walks.length} walks, `
+    + `in ${((Date.now() - t0) / 1000).toFixed(1)}s`
   );
 }
 

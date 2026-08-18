@@ -97,6 +97,10 @@
       <div class="hero-actions">
         <button class="btn btn--primary btn--lg" data-enter>Enter the corridor</button>
       </div>
+      <div id="walks-wrap" hidden>
+        <p class="label label--mid">Or take a curated walk</p>
+        <ul id="walks" class="walks"></ul>
+      </div>
       <ul class="keycaps" aria-label="Controls">
         <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk</li>
         <li><kbd>drag</kbd> look</li>
@@ -114,7 +118,14 @@
           <p class="label">Index</p>
           <h2>Photographs <span id="count" class="count"></span></h2>
         </div>
-        <p class="sec-note">Pick any frame to be set down in front of it inside the corridor.</p>
+        <div class="sec-tools">
+          <p class="sec-note">Pick any frame to be set down in front of it inside the corridor.</p>
+          <div class="find">
+            <label class="sr-only" for="q">Search the photographs</label>
+            <input id="q" type="search" placeholder="try “night”, “river”, “stray dog”, “waiting”" autocomplete="off" spellcheck="false">
+            <span id="q-count" aria-live="polite"></span>
+          </div>
+        </div>
       </header>
       <div id="grid" class="grid"></div>
       <noscript><p class="sec-note">The 3D corridor needs JavaScript. The photographs themselves live in the <code>photos/</code> folder of this repository.</p></noscript>
@@ -163,6 +174,12 @@
   <button id="hud-exit" class="chip">Leave the corridor <kbd>esc</kbd></button>
   <div id="hud-now"><span class="label">Now passing</span><strong></strong></div>
   <div id="hud-keys" class="chip chip--quiet"><kbd>W A S D</kbd> walk · <kbd>drag</kbd> look · <kbd>click</kbd> a frame</div>
+  <div id="tour" hidden>
+    <span class="label" id="tour-title"></span>
+    <span id="tour-pos"></span>
+    <button id="tour-play" class="chip" aria-label="Pause the walk">Pause <kbd>space</kbd></button>
+    <button id="tour-stop" class="chip">Wander off</button>
+  </div>
   <div id="joy" aria-hidden="true"><i></i></div>
 </div>
 

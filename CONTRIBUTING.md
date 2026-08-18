@@ -12,6 +12,9 @@ belongs here and what belongs in your fork.
   the flat index. Bugs here are always in scope.
 - **The build** — faster or more correct derivative generation, better filename handling,
   more input formats.
+- **The curator** — better prompts, cheaper passes, better guards on the model's output. If
+  you change a prompt, paste a few before/after captions in the PR: prompt changes are not
+  reviewable as a diff alone.
 - **Browser bugs** — with browser, OS, GPU and, if you can get it, the console output.
 - **Docs** — if something in the README turned out to be wrong or unclear when you tried it.
 
@@ -32,6 +35,13 @@ oversight.
 - **A build framework or bundler.** The site is hand-authored HTML, CSS and ES modules. The
   only build step exists because photographs need resizing.
 - **A CDN.** three.js is vendored on purpose, so no third party's outage can break the site.
+- **Any AI call at runtime.** The site is static and has no server, so a browser-side model
+  call would mean shipping an API key to every visitor. The whole AI pass runs at build time
+  and its output is committed (see [The curator](README.md#the-curator)). A PR that moves it
+  into the browser will be closed regardless of how the key is hidden.
+- **A hard dependency on the AI.** Every AI-derived field has a non-AI fallback, and the site
+  must build, deploy and work with no `ANTHROPIC_API_KEY` at all. Keep it that way — most
+  forks will not set one.
 - **Post-processing (bloom, DOF, colour grading).** It blurs and recolours the photographs,
   which defeats the point of a photography site. The glow is additive geometry instead.
 - **A config file for the site's text.** `index.html` is authored by hand so the page has real
@@ -43,8 +53,13 @@ oversight.
 ```bash
 npm install
 npm start        # http://localhost:5173
-npm test         # filename → slug → title rules
+npm test         # filename rules, metadata precedence, untrusted-curation guards
 ```
+
+`npm run curate` needs an `ANTHROPIC_API_KEY` and costs about a cent per photograph. You do
+not need it to work on anything else — without a key it skips itself, and `photos/curation.json`
+is already committed. **Don't commit a re-curation you didn't mean to**: check
+`git status photos/curation.json` before pushing.
 
 Before opening a PR:
 

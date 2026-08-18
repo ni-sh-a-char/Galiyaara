@@ -39,10 +39,13 @@ async function boot() {
   ]);
 
   let photos = [];
+  let walks = [];
   try {
     const res = await fetch('photos.json', { cache: 'no-cache' });
     if (!res.ok) throw new Error(res.status);
-    photos = (await res.json()).photos || [];
+    const data = await res.json();
+    photos = data.photos || [];
+    walks = data.walks || [];
   } catch (err) {
     console.error('Could not read photos.json — run `npm run build`.', err);
   }
@@ -54,6 +57,8 @@ async function boot() {
   buildIndex(photos);
   const gallery = createGallery($('#stage'), photos, hooks(photos));
   wire(gallery);
+  buildWalks(walks, gallery);
+  buildSearch(photos);
   requestAnimationFrame(() => body.classList.add('ready'));
 }
 
@@ -68,11 +73,13 @@ function buildIndex(photos) {
     el.dataset.index = i;
 
     const img = document.createElement('img');
-    Object.assign(img, { src: p.thumb, alt: p.title, loading: 'lazy', decoding: 'async' });
+    Object.assign(img, { src: p.thumb, alt: p.alt || p.title, loading: 'lazy', decoding: 'async' });
 
     const cap = document.createElement('figcaption');
     cap.textContent = p.title;
-    cap.setAttribute('aria-hidden', 'true');   // the img alt already says this
+    cap.setAttribute('aria-hidden', 'true');   // the img alt already describes it
+    // Everything the search matches on, flattened once at build-of-DOM time.
+    el.dataset.find = [p.title, p.caption, p.mood, ...(p.tags || [])].join(' ').toLowerCase();
 
     el.append(img, cap);
     return el;
@@ -89,12 +96,64 @@ function buildIndex(photos) {
   $('#highlights').append(...picks.map((i) => tile(photos[i], i)));
 }
 
+// ── Guided walks ────────────────────────────────────────────────────────────
+function buildWalks(walks, gallery) {
+  if (!walks.length) return;              // no curation yet, so no walks offered
+  const ul = $('#walks');
+  for (const w of walks) {
+    const li = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.className = 'walk';
+    btn.type = 'button';
+    btn.innerHTML = '<strong></strong><span></span><em></em>';
+    btn.querySelector('strong').textContent = w.title;
+    btn.querySelector('span').textContent = w.blurb;
+    btn.querySelector('em').textContent = `${w.slugs.length} frames`;
+    btn.addEventListener('click', () => gallery.startTour(w));
+    li.append(btn);
+    ul.append(li);
+  }
+  $('#walks-wrap').hidden = false;
+}
+
+// ── Search ──────────────────────────────────────────────────────────────────
+function buildSearch(photos) {
+  const input = $('#q');
+  const count = $('#q-count');
+  const tiles = [...$('#grid').children];
+  if (!photos.some((p) => p.tags?.length)) input.closest('.find').hidden = true;
+
+  const run = () => {
+    // Every word has to appear somewhere in the tile's text, so "night river"
+    // narrows rather than widens.
+    const terms = input.value.toLowerCase().split(/\s+/).filter(Boolean);
+    let hits = 0;
+    for (const tile of tiles) {
+      const ok = terms.every((t) => tile.dataset.find.includes(t));
+      tile.hidden = !ok;
+      if (ok) hits++;
+    }
+    count.textContent = terms.length ? `${hits} of ${tiles.length}` : '';
+  };
+  input.addEventListener('input', run);
+  input.addEventListener('search', run);
+}
+
 // ── Corridor → page ─────────────────────────────────────────────────────────
 function hooks(photos) {
   const now = $('#hud-now').querySelector('strong');
   return {
     onPass(photo) { now.textContent = photo ? photo.title : ''; },
     onMode(mode) { setMode(mode === 'roam'); },
+    onTour(state) {
+      $('#tour').hidden = !state;
+      if (!state) return;
+      $('#tour-title').textContent = state.title;
+      $('#tour-pos').textContent = `${state.at + 1} / ${state.total}`;
+      const play = $('#tour-play');
+      play.innerHTML = state.playing ? 'Pause <kbd>space</kbd>' : 'Resume <kbd>space</kbd>';
+      play.setAttribute('aria-label', state.playing ? 'Pause the walk' : 'Resume the walk');
+    },
     onFocus(photo, i) {
       body.classList.toggle('plated', !!photo);
       $('#plate').setAttribute('aria-hidden', photo ? 'false' : 'true');
@@ -129,6 +188,8 @@ function wire(gallery) {
   document.querySelectorAll('[data-enter]').forEach((b) => b.addEventListener('click', enter));
   $('#hud-exit').addEventListener('click', () => gallery.setMode('page'));
   $('#plate-close').addEventListener('click', () => gallery.unfocus());
+  $('#tour-play').addEventListener('click', () => gallery.toggleTour());
+  $('#tour-stop').addEventListener('click', () => gallery.endTour());
   $('#plate-prev').addEventListener('click', () => gallery.prev());
   $('#plate-next').addEventListener('click', () => gallery.next());
 

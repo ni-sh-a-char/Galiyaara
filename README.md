@@ -49,7 +49,12 @@ You can scroll past it like a normal page, or step inside and walk.
 </table>
 
 **Controls** — `W` `A` `S` `D` walk · drag to look · click a frame · `←` `→` next/previous ·
-`esc` step back · double-click for pointer lock · thumbstick on touch.
+`space` pause a walk · `esc` step back · double-click for pointer lock · thumbstick on touch.
+
+Or don't steer at all: **take a curated walk** and the corridor moves you frame to frame
+along a route, holding in front of each photograph long enough to actually look at it. The
+walks, and the order everything hangs in, are written by Claude at build time — see
+[The curator](#the-curator).
 
 ---
 
@@ -62,12 +67,15 @@ cp ~/Pictures/new-shot.jpg photos/
 git add photos/ && git commit -m "add new-shot" && git push
 ```
 
-A minute later GitHub Actions has resized it, measured it, sampled its colour, hung it on the
-next free stretch of wall and redeployed. **Nothing in the code mentions any individual
-photograph.** Deleting one works the same way — remove the file and push.
+A minute later GitHub Actions has resized it, measured it, sampled its colour, **had Claude
+look at it and write its title, caption, alt text and tags**, worked out where in the show it
+belongs, hung it and redeployed. **Nothing in the code mentions any individual photograph.**
+Deleting one works the same way — remove the file and push.
 
-**Titles** come from the filename: `night flower.jpg` becomes *Night Flower*. Override one, or
-add a caption, in [`photos/captions.json`](photos/captions.json):
+**You always get the last word.** Anything you write in
+[`photos/captions.json`](photos/captions.json) beats what Claude wrote, field by field, and if
+there is no curation at all the title falls back to the filename — `night flower.jpg` becomes
+*Night Flower*.
 
 ```json
 {
@@ -88,12 +96,15 @@ The corridor is not tied to these photographs, or to this photographer. To run i
 1. **Fork**, then empty [`photos/`](photos/) and drop yours in. Delete `photos/captions.json`
    if you would rather every title came from the filename.
 2. **Replace** `public/assets/portrait.jpg` with your own portrait.
-3. **Edit `public/index.html`** — it is a single hand-authored file, and every piece of you in
+3. **Optional: add an `ANTHROPIC_API_KEY`** secret so your photographs get written up too.
+   Skip it and everything still works, just with filename titles. See
+   [The curator](#the-curator).
+4. **Edit `public/index.html`** — it is a single hand-authored file, and every piece of you in
    it is in plain sight: `<title>`, the `og:` meta tags, the nav links, the hero, the About
    copy, the Instagram links, the footer. Search for `ni_sh_a.char` and you will find them all.
-4. **Update the licences.** [`photos/LICENSE`](photos/LICENSE) reserves *these* photographs;
+5. **Update the licences.** [`photos/LICENSE`](photos/LICENSE) reserves *these* photographs;
    put your own terms there. `LICENSE` (MIT) covers the code and you can keep it as is.
-5. **Settings → Pages → Source → GitHub Actions.** Push, and you are live.
+6. **Settings → Pages → Source → GitHub Actions.** Push, and you are live.
 
 Everything else — corridor length, layout, colour, streaming — derives from your photographs
 automatically. If you build one, open an issue; a wall of forks is the best thing that could
@@ -150,13 +161,69 @@ runtime third-party dependency and cannot be broken by someone else's outage.
 
 ---
 
+## The curator
+
+The interesting constraint: this is a static site on GitHub Pages. There is no server. Any
+AI call made from the browser would mean **shipping an API key to every visitor** — so the
+site makes none. Instead the whole AI pass happens once, at build time, and its output is
+committed to the repository:
+
+```
+photos/new-shot.jpg  ──►  [ build ]  ──►  photos/curation.json  ──►  photos.json  ──►  the corridor
+                              │                (committed)
+                              └── Claude looks at the photograph, once, ever
+```
+
+[`tools/curate.mjs`](tools/curate.mjs) makes two kinds of call:
+
+1. **Per photograph** — Claude is shown a 512 px copy and returns a title for the brass
+   plaque, a one-line caption, **alt text**, 6–10 search tags, and a mood. Cached against the
+   source file's content hash, so a photograph is never looked at twice.
+2. **Over the whole collection** — Claude sequences every photograph into the corridor so
+   neighbours talk to each other, and writes five guided walks through them. Re-runs only
+   when the collection actually changes.
+
+What that buys, concretely:
+
+| For the photographer | For the visitor |
+|---|---|
+| Drop a file in a folder; the wall text writes itself | Real captions instead of prettified filenames |
+| The show re-hangs itself as the collection grows | A hang order with some argument to it, not alphabetical |
+| No alt text to write, ever | Search that understands *"night"*, *"stray dog"*, *"waiting"* |
+| Override anything by hand, any time | Guided walks for anyone who doesn't want to steer |
+
+**Cost:** roughly **$0.01 per photograph, once** — about $1 for a hundred, plus a few cents
+to re-hang. Subsequent builds cost nothing because the curation is committed. That last part
+also means **forks inherit the curation for free**, and reviewers can read the diff and
+correct anything they disagree with.
+
+**It is optional.** With no `ANTHROPIC_API_KEY` the curate step exits quietly, the build falls
+back to filename titles, and the walks and search UI simply don't render. A fork with no key
+still builds and still deploys. To turn it on, add the key at **Settings → Secrets and
+variables → Actions**, or run it yourself:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+npm run curate          # only looks at photographs it hasn't seen
+npm run curate -- --force   # re-do everything
+```
+
+Two design notes worth stealing. **The model's output is untrusted input** — a hallucinated
+slug must not create a phantom frame, and a photograph the model forgets must not vanish from
+the gallery, so `reconcileShow()` validates the order against the real slug list and appends
+anything missing ([tested](tools/build.test.mjs)). And **the human always wins**: precedence is
+hand-written → Claude → filename, never the other way round.
+
+---
+
 ## Run it locally
 
 ```bash
 npm install
 npm start          # builds, then serves on http://localhost:5173
 npm run build      # just build dist/
-npm test           # checks the filename → slug → title rules
+npm run curate     # the AI pass — needs ANTHROPIC_API_KEY, skips itself without one
+npm test           # filename rules, metadata precedence, untrusted-curation guards
 ```
 
 The first build re-encodes everything (about a minute for 100 photographs). After that only
@@ -164,7 +231,8 @@ changed files are touched, so rebuilds take a few seconds.
 
 ```
 photos/                  your photographs, at whatever size you shot them
-  captions.json          optional title/caption overrides
+  captions.json          optional hand-written overrides — these always win
+  curation.json          what Claude wrote, committed so it is paid for once
   LICENSE                the photographs are NOT MIT — see below
 public/                  the site, served as-is
   index.html             hand-authored, no templating
@@ -173,6 +241,7 @@ public/                  the site, served as-is
   js/gallery.js          the corridor
   vendor/                three.js, vendored
 tools/build.mjs          photos/ + public/ → dist/
+tools/curate.mjs         the build-time AI pass
 tools/build.test.mjs
 .github/workflows/       build + deploy to Pages on every push to main
 dist/                    build output, git-ignored
@@ -205,8 +274,8 @@ Fork the corridor freely. Bring your own photographs.
 ## Credits
 
 Photographs by [**ni_sh_a.char**](https://www.instagram.com/ni_sh_a.char/).
-Built with [three.js](https://threejs.org) (MIT, vendored) and
-[sharp](https://sharp.pixelplumbing.com). Type is Cormorant Garamond, Inter and Tiro
+Built with [three.js](https://threejs.org) (MIT, vendored),
+[sharp](https://sharp.pixelplumbing.com), and [Claude](https://claude.com) as the curator. Type is Cormorant Garamond, Inter and Tiro
 Devanagari Hindi. Also by the same hand: [suna_ai](https://piyush-mishra-00.github.io/suna_ai/#/).
 
 <div align="center"><br>

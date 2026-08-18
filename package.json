@@ -6,10 +6,12 @@
   "type": "module",
   "scripts": {
     "build": "node tools/build.mjs",
+    "curate": "node tools/curate.mjs",
     "test": "node tools/build.test.mjs",
     "start": "npm run build && npx --yes serve dist -l 5173"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.117.1",
     "sharp": "^0.34.4",
     "three": "0.180.0"
   },

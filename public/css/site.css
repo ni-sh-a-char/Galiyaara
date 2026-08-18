@@ -451,3 +451,86 @@ body.plated #plate { opacity: 1; transform: none; visibility: visible; }
   #hud-exit { right: 1rem; top: 1rem; }
   #hud-now { left: 1rem; top: 1rem; }
 }
+
+/* ── Curated walks ─────────────────────────────────────────────────── */
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
+
+.label--mid { margin-top: 1.6rem; }
+
+/* Full width inside the centred column, or auto-fit only ever sees content width. */
+#walks-wrap { width: 100%; display: grid; justify-items: center; }
+
+.walks {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr));
+  gap: 0.6rem;
+  margin-top: 1rem;
+  width: min(1000px, 100%);
+  justify-content: center;
+}
+.walk {
+  display: grid;
+  gap: 0.4rem;
+  width: 100%;
+  height: 100%;
+  padding: 1.05rem 1.15rem;
+  text-align: left;
+  color: var(--paper);
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--line);
+  cursor: pointer;
+  transition: border-color 0.3s, background 0.3s, transform 0.3s var(--ease);
+}
+.walk:hover, .walk:focus-visible { border-color: var(--brass); background: rgba(201, 168, 106, 0.08); transform: translateY(-2px); }
+.walk strong { font: 400 1.12rem/1.2 var(--serif); }
+.walk span { font-size: 0.82rem; color: var(--muted); line-height: 1.5; }
+.walk em { font-style: normal; font-size: 0.64rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--brass-dim); }
+
+/* The read-out while a walk is playing. */
+#tour {
+  position: absolute;
+  left: 50%; bottom: 4.6rem;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.7rem 0.6rem 1.1rem;
+  white-space: nowrap;
+  background: rgba(6, 8, 14, 0.78);
+  border: 1px solid var(--line);
+  border-top-color: var(--brass-dim);
+  backdrop-filter: blur(12px);
+}
+#tour[hidden] { display: none; }
+#tour-pos { font-size: 0.74rem; color: var(--muted); letter-spacing: 0.1em; }
+
+/* ── Search ────────────────────────────────────────────────────────── */
+
+.sec-tools { display: grid; gap: 0.9rem; justify-items: flex-start; }
+.find { display: flex; align-items: center; gap: 0.8rem; width: min(420px, 100%); }
+.find[hidden] { display: none; }
+#q {
+  flex: 1;
+  padding: 0.7rem 0.9rem;
+  font: 400 0.88rem/1 var(--sans);
+  color: var(--paper);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  border-radius: 0;
+  transition: border-color 0.25s;
+}
+#q::placeholder { color: #6d7382; }
+#q:focus { border-color: var(--brass); outline: none; }
+#q-count { font-size: 0.72rem; letter-spacing: 0.14em; color: var(--brass); }
+
+.tile[hidden] { display: none; }
+
+@media (max-width: 860px) {
+  #tour { bottom: 4rem; left: 1rem; right: 1rem; transform: none; flex-wrap: wrap; white-space: normal; justify-content: center; }
+}
