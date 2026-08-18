@@ -5,6 +5,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  # A free tier cannot describe a hundred photographs in one allowance window,
+  # so the curator chips away at the backlog once a day until it is done. When
+  # there is nothing left to look at the run exits in seconds.
+  schedule:
+    - cron: '17 3 * * *'
 
 permissions:
   contents: write   # the curator commits photos/curation.json back

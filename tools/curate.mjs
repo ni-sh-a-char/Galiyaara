@@ -34,7 +34,7 @@ const SRC = path.join(ROOT, 'photos');
 const CURATION = path.join(SRC, 'curation.json');
 
 const CONCURRENCY = 2;     // free tiers rate-limit hard; two at a time is polite
-const LOOK_PX = 512;       // what the model is shown — enough to describe, cheap to send
+const LOOK_PX = 384;       // image tokens scale with area, and free tiers are metered on tokens;
 const WALKS = 5;
 const REQ_TIMEOUT = 90000; // a hung socket must not stall a CI job forever
 const MAX_BACKOFF = 60;    // seconds we are willing to sit out a 429
@@ -105,14 +105,14 @@ export function pickProvider(env = process.env) {
   return null;
 }
 
+/** The free tier's allowance is spent. Not a failure — just "come back later". */
+export class OutOfQuota extends Error {}
+
 /**
  * One OpenAI-compatible chat call, with the patience a free tier demands.
  * 429 is the normal case here, not an exception — honour Retry-After when it is
  * offered and back off when it is not.
  */
-/** The free tier's daily allowance is gone. Not an error — just "tomorrow". */
-export class OutOfQuota extends Error {}
-
 async function chat(provider, messages, { maxTokens = 1200, tries = 5 } = {}) {
   for (let attempt = 0; ; attempt++) {
     let res;
@@ -276,7 +276,7 @@ async function describe(provider, file, filename, fallbackTitle) {
         },
       ],
     },
-  ], { maxTokens: 700 });
+  ], { maxTokens: 500 });   // the JSON is short; do not pay for headroom nobody uses
 
   return normalizePhoto(parseJson(text), fallbackTitle);
 }
