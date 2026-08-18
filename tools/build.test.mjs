@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { resolveMeta, slugify, titleize } from './build.mjs';
-import { reconcileShow } from './curate.mjs';
+import { PROVIDERS, normalizePhoto, parseJson, pickProvider, reconcileShow } from './curate.mjs';
 
 const cases = [
   ['night flower.jpg', 'night-flower', 'Night Flower'],
@@ -85,4 +85,64 @@ console.log(`ok — ${cases.length} filename cases`);
   assert.deepEqual(empty.walks, []);
 
   console.log('ok — 6 untrusted-curation cases');
+}
+
+// --- Reading free models' JSON ---------------------------------------------
+// Free models are chatty and fond of code fences. The parser has to cope.
+{
+  const want = { title: 'Night Flower', tags: ['night'] };
+  const wrappings = [
+    JSON.stringify(want),
+    'Sure! Here is the JSON:\n```json\n' + JSON.stringify(want) + '\n```\nHope that helps.',
+    '```\n' + JSON.stringify(want) + '\n```',
+    'Thinking... ' + JSON.stringify(want) + ' and that is my answer. {"trailing": "junk"}',
+  ];
+  for (const w of wrappings) assert.deepEqual(parseJson(w), want, w.slice(0, 30));
+
+  // Braces inside strings must not end the object early.
+  assert.deepEqual(parseJson('{"caption": "a } brace, and a \\" quote"}').caption, 'a } brace, and a " quote');
+
+  for (const bad of ['no json here', '{"unclosed": ']) {
+    assert.throws(() => parseJson(bad), /JSON/, bad);
+  }
+  console.log('ok — 7 loose-JSON cases');
+}
+
+// --- Coercing whatever the model returned ----------------------------------
+{
+  const good = normalizePhoto({
+    title: '  Night   Flower ', caption: 'x'.repeat(400), alt: 'An alt',
+    tags: ['Night', 'NIGHT', ' river ', '', 'a'.repeat(50), ...Array(20).fill('t').map((t, i) => t + i)],
+    mood: 'Quiet And Still',
+  }, 'Fallback');
+  assert.equal(good.title, 'Night Flower', 'whitespace collapsed');
+  assert.equal(good.caption.length, 140, 'caption clamped');
+  assert.equal(good.mood, 'quiet', 'mood reduced to one lowercase word');
+  assert.equal(good.tags.length, 12, 'tags capped');
+  assert.deepEqual(good.tags.slice(0, 2), ['night', 'river'], 'tags lowercased and de-duplicated');
+
+  // Garbage in, renderable out — every field still has the right type.
+  for (const junk of [null, {}, { title: 42, tags: 'not-an-array', mood: null }, []]) {
+    const n = normalizePhoto(junk, 'Fallback');
+    assert.equal(n.title, 'Fallback');
+    assert.equal(n.alt, 'Fallback', 'alt falls back to the title, never empty');
+    assert.equal(typeof n.caption, 'string');
+    assert.ok(Array.isArray(n.tags));
+    assert.equal(typeof n.mood, 'string');
+  }
+  console.log('ok — 9 normalisation cases');
+}
+
+// --- Picking a provider ----------------------------------------------------
+{
+  assert.equal(pickProvider({}), null, 'no key means no curation, not a crash');
+  assert.equal(pickProvider({ GROQ_API_KEY: 'k' }).label, 'Groq');
+  assert.equal(pickProvider({ OPENROUTER_API_KEY: 'k' }).label, 'OpenRouter');
+  assert.equal(pickProvider({ GROQ_API_KEY: 'k', OPENROUTER_API_KEY: 'k' }).label, 'Groq', 'first listed wins');
+  assert.equal(pickProvider({ OPENROUTER_API_KEY: 'k', GALIYAARA_AI_MODEL: 'mine' }).model, 'mine');
+  assert.equal(pickProvider({ GALIYAARA_AI_BASE_URL: 'https://x.dev/v1/', GALIYAARA_AI_KEY: 'k' }).base, 'https://x.dev/v1', 'trailing slash trimmed');
+  assert.equal(PROVIDERS.opencodezen.vision, false, 'zen free models cannot see');
+  assert.throws(() => pickProvider({ GALIYAARA_AI_PROVIDER: 'nope' }), /unknown/);
+  assert.throws(() => pickProvider({ GALIYAARA_AI_PROVIDER: 'groq' }), /GROQ_API_KEY is not set/);
+  console.log('ok — 9 provider-selection cases');
 }

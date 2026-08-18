@@ -1,23 +1,28 @@
 /**
  * The Curator — the AI pass, which runs at build time and never at runtime.
  *
- * This is a static site on GitHub Pages. Calling Claude from the browser would
+ * This is a static site on GitHub Pages. Calling a model from the browser would
  * mean shipping an API key to every visitor, so nothing here happens in the
- * browser: Claude looks at each photograph once, when it is first added, and
- * writes it up. The result is committed to photos/curation.json, so visitors
- * get finished words instantly, forks inherit the curation for free, and a
- * photograph is never paid for twice.
+ * browser: a model looks at each photograph once, when it is first added, and
+ * writes it up. The result is committed to photos/curation.json, so visitors get
+ * finished words instantly, forks inherit the curation for free, and a
+ * photograph is never looked at twice.
  *
  * Two passes:
- *   1. Per photograph — title, caption, alt text, tags, mood.
+ *   1. Per photograph — title, caption, alt text, tags, mood. Needs vision.
  *   2. Over the whole collection — the order the photographs hang in, and a
- *      handful of guided walks through them.
+ *      handful of guided walks through them. Text only.
  *
- * Both are cached by the source file's content hash. With no API key this exits
- * quietly and the build falls back to filename titles, so a fork with no key
- * still builds and deploys.
+ * Runs on free models through any OpenAI-compatible provider (Groq, OpenRouter,
+ * OpenCode Zen, or your own base URL) — no SDK, just fetch. Free models don't
+ * do strict schemas or reliable tool calls, so we ask for JSON, parse it
+ * leniently, and normalise whatever comes back. Everything downstream treats
+ * the model's output as untrusted input: see normalizePhoto() and
+ * reconcileShow().
+ *
+ * With no key this exits quietly and the build falls back to filename titles,
+ * so a fork with no key still builds and deploys.
  */
-import Anthropic from '@anthropic-ai/sdk';
 import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
@@ -28,14 +33,190 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(ROOT, 'photos');
 const CURATION = path.join(SRC, 'curation.json');
 
-const MODEL = 'claude-opus-5';
-const CONCURRENCY = 4;
-const LOOK_PX = 512;   // what Claude is shown; plenty to describe by, cheap to send
+const CONCURRENCY = 2;  // free tiers rate-limit hard; two at a time is polite
+const LOOK_PX = 512;    // what the model is shown — enough to describe, cheap to send
 const WALKS = 5;
 
 const hash = (buf) => createHash('sha1').update(buf).digest('hex').slice(0, 16);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// --- Pass 1: one photograph -------------------------------------------------
+// --- Providers --------------------------------------------------------------
+
+/**
+ * Free tiers, in the order we look for a key. Every one of these speaks the
+ * OpenAI /chat/completions shape, so there is one client for all of them.
+ * Free model IDs churn — override with GALIYAARA_AI_MODEL.
+ */
+export const PROVIDERS = {
+  groq: {
+    label: 'Groq',
+    env: 'GROQ_API_KEY',
+    base: 'https://api.groq.com/openai/v1',
+    model: 'qwen/qwen3.6-27b',
+    vision: true,
+    keys: 'https://console.groq.com/keys',
+  },
+  openrouter: {
+    label: 'OpenRouter',
+    env: 'OPENROUTER_API_KEY',
+    base: 'https://openrouter.ai/api/v1',
+    model: 'google/gemma-4-31b-it:free',
+    vision: true,
+    keys: 'https://openrouter.ai/keys',
+    headers: { 'X-Title': 'Galiyaara' },
+  },
+  opencodezen: {
+    label: 'OpenCode Zen',
+    env: 'OPENCODE_API_KEY',
+    base: 'https://opencode.ai/zen/v1',
+    model: 'nemotron-3-ultra-free',
+    vision: false,   // its free models are coding models — they cannot see
+    keys: 'https://opencode.ai/zen',
+  },
+};
+
+/** Whichever free provider has a key set, unless one was named explicitly. */
+export function pickProvider(env = process.env) {
+  const named = env.GALIYAARA_AI_PROVIDER;
+
+  if (named === 'custom' || (!named && env.GALIYAARA_AI_BASE_URL && env.GALIYAARA_AI_KEY)) {
+    if (!env.GALIYAARA_AI_BASE_URL || !env.GALIYAARA_AI_KEY) {
+      throw new Error('custom provider needs both GALIYAARA_AI_BASE_URL and GALIYAARA_AI_KEY');
+    }
+    return {
+      label: 'custom', vision: true, key: env.GALIYAARA_AI_KEY,
+      base: env.GALIYAARA_AI_BASE_URL.replace(/\/$/, ''),
+      model: env.GALIYAARA_AI_MODEL || 'unset',
+    };
+  }
+
+  if (named) {
+    const p = PROVIDERS[named];
+    if (!p) throw new Error(`unknown GALIYAARA_AI_PROVIDER "${named}" — one of: ${Object.keys(PROVIDERS).join(', ')}, custom`);
+    if (!env[p.env]) throw new Error(`GALIYAARA_AI_PROVIDER=${named} but ${p.env} is not set`);
+    return { ...p, key: env[p.env], model: env.GALIYAARA_AI_MODEL || p.model };
+  }
+
+  for (const p of Object.values(PROVIDERS)) {
+    if (env[p.env]) return { ...p, key: env[p.env], model: env.GALIYAARA_AI_MODEL || p.model };
+  }
+  return null;
+}
+
+/**
+ * One OpenAI-compatible chat call, with the patience a free tier demands.
+ * 429 is the normal case here, not an exception — honour Retry-After when it is
+ * offered and back off when it is not.
+ */
+async function chat(provider, messages, { maxTokens = 1200, tries = 5 } = {}) {
+  for (let attempt = 0; ; attempt++) {
+    let res;
+    try {
+      res = await fetch(`${provider.base}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${provider.key}`,
+          ...(provider.headers || {}),
+        },
+        body: JSON.stringify({
+          model: provider.model,
+          messages,
+          max_tokens: maxTokens,
+          temperature: 0.6,
+        }),
+      });
+    } catch (err) {
+      if (attempt >= tries - 1) throw err;
+      await sleep(2000 * 2 ** attempt);
+      continue;
+    }
+
+    if (res.ok) {
+      const body = await res.json();
+      const text = body.choices?.[0]?.message?.content;
+      if (!text) throw new Error(`empty response (finish_reason: ${body.choices?.[0]?.finish_reason})`);
+      return text;
+    }
+
+    const retryable = res.status === 429 || res.status >= 500;
+    if (!retryable || attempt >= tries - 1) {
+      throw new Error(`${res.status} ${res.statusText}: ${(await res.text()).slice(0, 240)}`);
+    }
+    const after = Number(res.headers.get('retry-after'));
+    await sleep(Number.isFinite(after) && after > 0 ? after * 1000 : 2000 * 2 ** attempt);
+  }
+}
+
+// --- Making the model's output safe -----------------------------------------
+
+/**
+ * Free models wrap JSON in prose, in code fences, or both. Take the first
+ * balanced object in the text rather than trusting the whole string.
+ */
+export function parseJson(text) {
+  const cleaned = String(text).replace(/```(?:json)?/gi, '');
+  const start = cleaned.indexOf('{');
+  if (start < 0) throw new Error('no JSON object in response');
+
+  let depth = 0, inStr = false, esc = false;
+  for (let i = start; i < cleaned.length; i++) {
+    const c = cleaned[i];
+    if (esc) { esc = false; continue; }
+    if (c === '\\') { esc = true; continue; }
+    if (c === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (c === '{') depth++;
+    else if (c === '}' && --depth === 0) return JSON.parse(cleaned.slice(start, i + 1));
+  }
+  throw new Error('unbalanced JSON in response');
+}
+
+const str = (v, max) => (typeof v === 'string' ? v : '').replace(/\s+/g, ' ').trim().slice(0, max);
+
+/**
+ * Coerce whatever the model returned into the shape the site renders. With no
+ * schema enforcement on free models, this is where that guarantee is made —
+ * nothing downstream should ever have to check a type.
+ */
+export function normalizePhoto(raw, fallbackTitle) {
+  const r = raw && typeof raw === 'object' ? raw : {};
+  const title = str(r.title, 60) || fallbackTitle;
+  const tags = (Array.isArray(r.tags) ? r.tags : [])
+    .map((t) => str(t, 24).toLowerCase())
+    .filter(Boolean);
+  return {
+    title,
+    caption: str(r.caption, 140),
+    alt: str(r.alt, 200) || title,
+    tags: [...new Set(tags)].slice(0, 12),
+    mood: str(r.mood, 20).toLowerCase().split(' ')[0] || '',
+  };
+}
+
+/**
+ * Take what the model returned and make it safe to hang a gallery from.
+ * A hallucinated slug must not create a phantom frame, and — much worse — a
+ * photograph the model forgot must not silently vanish from the corridor.
+ */
+export function reconcileShow(show, slugs) {
+  const valid = new Set(slugs);
+  const hang = [...new Set((show?.hang || []).filter((s) => valid.has(s)))];
+  for (const slug of slugs) if (!hang.includes(slug)) hang.push(slug);
+
+  const walks = (show?.walks || [])
+    .map((w) => ({
+      id: str(w?.id, 40).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+      title: str(w?.title, 48),
+      blurb: str(w?.blurb, 130),
+      slugs: [...new Set((Array.isArray(w?.slugs) ? w.slugs : []).filter((s) => valid.has(s)))].slice(0, 14),
+    }))
+    .filter((w) => w.id && w.title && w.slugs.length >= 3);
+
+  return { hang, walks };
+}
+
+// --- The voice --------------------------------------------------------------
 
 const EYE = `You are the curator of Galiyaara, a photography gallery built as a
 corridor you walk down. The photographs are street and documentary work from
@@ -50,118 +231,55 @@ or "This". No exclamation marks. Nothing about the photographer's skill.
 If the photograph shows people, describe them by what they are doing, not by
 guessing who they are.`;
 
-const PHOTO_TOOL = {
-  name: 'record_photograph',
-  description: 'Record the wall text and index metadata for one photograph.',
-  strict: true,
-  input_schema: {
-    type: 'object',
-    properties: {
-      title: {
-        type: 'string',
-        description: '1-4 words. Title Case. The name on the brass plaque under the frame. Concrete over poetic.',
-      },
-      caption: {
-        type: 'string',
-        description: 'One sentence, under 100 characters, no trailing period unless it is a full sentence. Notices one true thing.',
-      },
-      alt: {
-        type: 'string',
-        description: 'Plain factual description for a screen reader, under 160 characters. What is in the frame, no interpretation, no mood words.',
-      },
-      tags: {
-        type: 'array',
-        items: { type: 'string' },
-        description: '6 to 10 lowercase single words or short phrases someone might search: subjects, place, time of day, light, colour, mood, activity.',
-      },
-      mood: {
-        type: 'string',
-        description: 'One lowercase word for the overall feeling.',
-      },
-    },
-    required: ['title', 'caption', 'alt', 'tags', 'mood'],
-    additionalProperties: false,
-  },
-};
+// --- Pass 1: one photograph -------------------------------------------------
 
-async function describe(client, file, filename) {
-  // Claude sees a small copy — the description doesn't get better at 2200px,
-  // and the request gets a lot more expensive.
+const PHOTO_JSON = `Reply with one JSON object and nothing else — no preamble, no code fence.
+
+{
+  "title": "1-4 words, Title Case, the name on the brass plaque under the frame",
+  "caption": "one sentence under 100 characters that notices a single true thing",
+  "alt": "plain factual description for a screen reader, under 160 characters, no mood words",
+  "tags": ["6 to 10 lowercase words someone might search: subjects, place, time of day, light, colour, mood, activity"],
+  "mood": "one lowercase word"
+}`;
+
+async function describe(provider, file, filename, fallbackTitle) {
+  // The model sees a small copy — the description does not get better at 2200px,
+  // and free tiers cap request size.
   const jpeg = await sharp(file).rotate()
     .resize({ width: LOOK_PX, height: LOOK_PX, fit: 'inside', withoutEnlargement: true })
     .jpeg({ quality: 78 }).toBuffer();
 
-  const res = await client.messages.create({
-    model: MODEL,
-    max_tokens: 2000,
-    system: EYE,
-    output_config: { effort: 'low' },
-    tools: [PHOTO_TOOL],
-    tool_choice: { type: 'tool', name: 'record_photograph' },
-    messages: [{
+  const text = await chat(provider, [
+    { role: 'system', content: `${EYE}\n\n${PHOTO_JSON}` },
+    {
       role: 'user',
       content: [
-        { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: jpeg.toString('base64') } },
+        { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${jpeg.toString('base64')}` } },
         {
           type: 'text',
-          text: `Write the wall text for this photograph. The photographer filed it as "${filename}" — treat that as a hint about intent, not as something to repeat back if it is meaningless.`,
+          text: `Write the wall text for this photograph. The photographer filed it as "${filename}" — a hint about intent, not something to repeat back if it is meaningless.`,
         },
       ],
-    }],
-  });
+    },
+  ], { maxTokens: 700 });
 
-  const call = res.content.find((b) => b.type === 'tool_use');
-  if (!call) throw new Error(`no tool_use in response (stop_reason: ${res.stop_reason})`);
-  return call.input;
+  return normalizePhoto(parseJson(text), fallbackTitle);
 }
 
 // --- Pass 2: the whole collection -------------------------------------------
 
-const HANG_TOOL = {
-  name: 'hang_the_show',
-  description: 'Decide the order the photographs hang in, and the guided walks through them.',
-  strict: true,
-  input_schema: {
-    type: 'object',
-    properties: {
-      hang: {
-        type: 'array',
-        items: { type: 'string' },
-        description: 'Every slug exactly once, in the order they should hang along the corridor. Adjacent photographs should talk to each other.',
-      },
-      walks: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: {
-            id: { type: 'string', description: 'lowercase-hyphenated identifier' },
-            title: { type: 'string', description: '2-5 words naming the walk' },
-            blurb: { type: 'string', description: 'One sentence, under 110 characters, saying what this walk is.' },
-            slugs: { type: 'array', items: { type: 'string' }, description: '5 to 12 slugs, in the order to walk them.' },
-          },
-          required: ['id', 'title', 'blurb', 'slugs'],
-          additionalProperties: false,
-        },
-      },
-    },
-    required: ['hang', 'walks'],
-    additionalProperties: false,
-  },
-};
-
-async function hangShow(client, entries) {
+async function hangShow(provider, entries) {
   const list = entries
-    .map((e) => `${e.slug} | ${e.title} | ${e.mood} | ${e.tags.join(', ')}`)
+    .map((e) => `${e.slug} | ${e.title} | ${e.mood} | ${(e.tags || []).join(', ')}`)
     .join('\n');
 
-  const res = await client.messages.create({
-    model: MODEL,
-    max_tokens: 16000,
-    system: `${EYE}\n\nYou are now hanging the show.`,
-    output_config: { effort: 'high' },
-    tools: [HANG_TOOL],
-    tool_choice: { type: 'tool', name: 'hang_the_show' },
-    messages: [{
+  const text = await chat(provider, [
+    {
+      role: 'system',
+      content: `${EYE}\n\nYou are now hanging the show. Reply with one JSON object and nothing else — no preamble, no code fence.`,
+    },
+    {
       role: 'user',
       content: `Here is the whole collection, one per line as "slug | title | mood | tags":
 
@@ -169,22 +287,29 @@ ${list}
 
 Two jobs.
 
-1. Sequence every photograph into the corridor. A visitor walks past them in this
-   order, one on the left wall then one on the right, so neighbours are seen
-   together. Build runs of related work and let the show turn between them rather
-   than jumping at random. Open on something that makes someone want to keep
-   walking, and end on something that feels like an ending. Use every slug exactly
-   once and invent none.
+1. "hang": every slug above, exactly once, in the order they should hang along the
+   corridor. A visitor walks past them in this order — one on the left wall, then one
+   on the right — so neighbours are seen together. Build runs of related work and let
+   the show turn between them rather than jumping at random. Open on something that
+   makes someone want to keep walking; end on something that feels like an ending.
+   Invent no slugs.
 
-2. Write ${WALKS} guided walks — themed routes through the collection that a visitor
-   can take instead of wandering. Each should have a real argument to it, not just
-   a tag bucket. Slugs may repeat across different walks.`,
-    }],
-  });
+2. "walks": ${WALKS} guided routes through the collection, for a visitor who would rather
+   not wander. Each needs a real argument to it, not just a tag bucket. Slugs may
+   repeat between walks.
 
-  const call = res.content.find((b) => b.type === 'tool_use');
-  if (!call) throw new Error(`no tool_use in response (stop_reason: ${res.stop_reason})`);
-  return call.input;
+Reply exactly:
+
+{
+  "hang": ["slug", "slug"],
+  "walks": [
+    { "id": "lowercase-hyphenated", "title": "2-5 words", "blurb": "one sentence under 110 characters", "slugs": ["slug"] }
+  ]
+}`,
+    },
+  ], { maxTokens: 8000 });
+
+  return parseJson(text);
 }
 
 // --- Plumbing ---------------------------------------------------------------
@@ -207,24 +332,7 @@ async function pool(n, items, fn) {
  * actually shown, so re-running it is skipped unless that input changed.
  */
 export const hangKeyOf = (entries) =>
-  hash(Buffer.from(entries.map((e) => `${e.slug}:${e.mood}:${e.tags.join(',')}`).sort().join('|')));
-
-/**
- * Take what the model returned and make it safe to hang a gallery from.
- * A hallucinated slug must not create a phantom frame, and — much worse — a
- * photograph the model forgot must not silently vanish from the corridor.
- */
-export function reconcileShow(show, slugs) {
-  const valid = new Set(slugs);
-  const hang = [...new Set((show.hang || []).filter((s) => valid.has(s)))];
-  for (const slug of slugs) if (!hang.includes(slug)) hang.push(slug);
-
-  const walks = (show.walks || [])
-    .map((w) => ({ ...w, slugs: [...new Set((w.slugs || []).filter((s) => valid.has(s)))] }))
-    .filter((w) => w.id && w.title && w.slugs.length >= 3);
-
-  return { hang, walks };
-}
+  hash(Buffer.from(entries.map((e) => `${e.slug}:${e.mood}:${(e.tags || []).join(',')}`).sort().join('|')));
 
 export async function loadCuration(file = CURATION) {
   try {
@@ -236,7 +344,8 @@ export async function loadCuration(file = CURATION) {
 
 async function main() {
   const force = process.argv.includes('--force');
-  const client = new Anthropic({ maxRetries: 4 });
+  const provider = pickProvider();
+  console.log(`curating via ${provider.label} — ${provider.model}`);
 
   const curation = await loadCuration();
   curation.photos ||= {};
@@ -245,8 +354,9 @@ async function main() {
   const files = (await readdir(SRC)).filter((f) => EXT.test(f)).sort((a, b) => a.localeCompare(b));
   if (!files.length) throw new Error(`No images in ${SRC}`);
 
-  // build.mjs owns slugging; import it rather than keep a second copy in sync.
-  const { slugify } = await import('./build.mjs');
+  // build.mjs owns slugging and titling; import them rather than keep a second
+  // copy in sync.
+  const { slugify, titleize } = await import('./build.mjs');
   const seen = new Set();
   const all = [];
   for (const file of files) {
@@ -269,19 +379,38 @@ async function main() {
     }
   }
 
-  console.log(`looking at ${todo.length} photograph${todo.length === 1 ? '' : 's'}…`);
-  let done = 0;
-  await pool(CONCURRENCY, todo, async (p) => {
-    try {
-      const meta = await describe(client, path.join(SRC, p.file), p.file);
-      curation.photos[p.slug] = { stamp: p.stamp, ...meta };
-      console.log(`  ${(++done).toString().padStart(3)}/${todo.length}  ${p.slug} — "${meta.title}"`);
-    } catch (err) {
-      // One bad photograph must not lose the other 102. It simply stays
-      // uncurated and falls back to its filename title.
-      console.warn(`  !  ${p.slug}: ${err.message}`);
+  if (todo.length && !provider.vision) {
+    console.warn(`  !  ${provider.label}'s free models cannot see images — skipping the per-photograph pass.`);
+    console.warn('     Use Groq or OpenRouter for that, or point GALIYAARA_AI_MODEL at a vision model.');
+  } else if (todo.length) {
+    console.log(`looking at ${todo.length} photograph${todo.length === 1 ? '' : 's'}…`);
+    let done = 0;
+    const failures = [];
+    await pool(CONCURRENCY, todo, async (p) => {
+      try {
+        const meta = await describe(provider, path.join(SRC, p.file), p.file, titleize(p.slug));
+        curation.photos[p.slug] = { stamp: p.stamp, ...meta };
+        console.log(`  ${(++done).toString().padStart(3)}/${todo.length}  ${p.slug} — "${meta.title}"`);
+      } catch (err) {
+        // One bad photograph must not lose the other 102. It simply stays
+        // uncurated and falls back to its filename title.
+        failures.push(err.message);
+        console.warn(`  !  ${p.slug}: ${err.message}`);
+      }
+    });
+
+    // Every single one failing is not "nothing to curate", it is a broken key,
+    // a wrong model id, or a provider outage. Say so and fail, rather than
+    // quietly deploying an uncurated site forever.
+    if (!done && failures.length) {
+      throw new Error(
+        `all ${failures.length} request(s) to ${provider.label} failed. First error:\n`
+        + `    ${failures[0]}\n`
+        + `  Check ${provider.env || 'GALIYAARA_AI_KEY'}, and that "${provider.model}" is a model `
+        + 'your account can use (free model IDs change — set GALIYAARA_AI_MODEL to override).'
+      );
     }
-  });
+  }
 
   const entries = all
     .filter((p) => curation.photos[p.slug])
@@ -291,23 +420,35 @@ async function main() {
   if (entries.length && (force || key !== curation.hangKey)) {
     console.log(`hanging the show — ${entries.length} photographs…`);
     try {
-      const show = reconcileShow(await hangShow(client, entries), entries.map((e) => e.slug));
+      const show = reconcileShow(await hangShow(provider, entries), entries.map((e) => e.slug));
       curation.hang = show.hang;
       curation.walks = show.walks;
       curation.hangKey = key;
-      console.log(`  order set, ${curation.walks.length} walks: ${curation.walks.map((w) => w.title).join(' · ')}`);
+      console.log(`  order set, ${show.walks.length} walk${show.walks.length === 1 ? '' : 's'}`
+        + (show.walks.length ? `: ${show.walks.map((w) => w.title).join(' · ')}` : ''));
     } catch (err) {
+      // Losing the hang order is survivable — the build falls back to
+      // alphabetical and simply offers no walks.
       console.warn(`  !  could not hang the show: ${err.message}`);
     }
   }
 
   await writeFile(CURATION, JSON.stringify(curation, null, 1) + '\n');
-  console.log(`wrote ${path.relative(ROOT, CURATION)} — commit it so nobody pays to look at these twice`);
+  console.log(`wrote ${path.relative(ROOT, CURATION)} — commit it so nobody looks at these twice`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
-    console.log('no ANTHROPIC_API_KEY — skipping curation; the build will fall back to filename titles');
+  let provider = null;
+  try {
+    provider = pickProvider();
+  } catch (err) {
+    console.error(err.message);
+    process.exit(1);
+  }
+  if (!provider) {
+    const list = Object.values(PROVIDERS).map((p) => `${p.env}  — ${p.label}, free: ${p.keys}`).join('\n    ');
+    console.log('no AI key set — skipping curation; the build falls back to filename titles.');
+    console.log(`  set any one of:\n    ${list}`);
     process.exit(0);
   }
   main().catch((err) => {

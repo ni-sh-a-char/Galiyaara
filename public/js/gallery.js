@@ -170,18 +170,37 @@ function buildStars(sprite) {
  */
 export function createGallery(canvas, photos, hooks = {}) {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const lowPower = matchMedia('(max-width: 820px)').matches || navigator.hardwareConcurrency <= 4;
+  // Any touch device (phone or tablet) gets the lighter path: a 2x-DPR tablet
+  // asking for a 2048x2732 render is how you get eight frames a second.
+  const lowPower = matchMedia('(pointer: coarse)').matches
+    || matchMedia('(max-width: 820px)').matches
+    || navigator.hardwareConcurrency <= 4;
   const LENGTH = START + photos.length * SEG + 30;
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: !lowPower, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(devicePixelRatio, lowPower ? 1.5 : 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.25;
+  renderer.xr.enabled = true;
+  renderer.xr.setReferenceSpaceType('local-floor');
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(58, 1, 0.1, 900);
-  camera.position.set(0, EYE, 8);
   camera.rotation.order = 'YXZ';
+
+  // WebXR writes the headset pose straight onto the camera, so the walker's
+  // position lives one level up: the rig is the feet, the camera is the head.
+  // Outside XR the camera simply sits at eye height above the rig.
+  const rig = new THREE.Group();
+  rig.position.set(0, 0, 8);
+  camera.position.set(0, EYE, 0);
+  rig.add(camera);
+  scene.add(rig);
+
+  // Where the head actually is in the world — not the same as rig.position once
+  // a headset is involved. Everything that measures distance uses this.
+  const eye = new THREE.Vector3(0, EYE, 8);
+  const syncEye = () => { rig.updateMatrixWorld(true); camera.getWorldPosition(eye); };
 
   scene.fog = new THREE.FogExp2(0x0b1122, 0.0175);
 
@@ -373,7 +392,7 @@ export function createGallery(canvas, photos, hooks = {}) {
     dustPos.set([
       (Math.random() - 0.5) * HALF_W * 2,
       Math.random() * 5,
-      camera.position.z - Math.random() * DUST_D,
+      rig.position.z - Math.random() * DUST_D,
     ], i * 3);
   }
   const dustGeo = new THREE.BufferGeometry();
@@ -481,7 +500,9 @@ export function createGallery(canvas, photos, hooks = {}) {
     // Far enough back that the long edge fits the frustum, then turn to face
     // the wall the picture is on (side -1 => look along -X, +1 => along +X).
     const d = Math.max(a.w, a.h) * 1.15 + 0.95;
-    dock.pos.set(a.side * (HALF_W - 0.04 - d), ART_Y - 0.1, a.z);
+    // dock.pos is where the *feet* go, so subtract eye height to land the head
+    // at the picture's centre. In a headset the feet belong on the floor.
+    dock.pos.set(a.side * (HALF_W - 0.04 - d), renderer.xr.isPresenting ? 0 : ART_Y - 0.1 - EYE, a.z);
     dock.yaw = -a.side * Math.PI / 2;
     dock.pitch = 0.04;
     dock.active = true;
@@ -499,7 +520,7 @@ export function createGallery(canvas, photos, hooks = {}) {
     endTour();
     if (focused === null) return;
     const a = artworks[focused];
-    camera.position.set(0, EYE, a.z + 0.6);
+    rig.position.set(0, 0, a.z + 0.6);
     yaw = 0; pitch = 0;
     focused = null;
     dock.active = false;
@@ -611,20 +632,22 @@ export function createGallery(canvas, photos, hooks = {}) {
     vel.x += (Math.cos(yaw) * s + Math.sin(yaw) * -f) * accel * dt;
     vel.z += (Math.sin(yaw) * s + Math.cos(yaw) * f * -1) * accel * dt;
     vel.multiplyScalar(Math.exp(-7 * dt));
-    camera.position.x = clamp(camera.position.x + vel.x * dt, -HALF_W + 0.55, HALF_W - 0.55);
-    camera.position.z = clamp(camera.position.z + vel.z * dt, -(LENGTH - 24), 10);
+    rig.position.x = clamp(rig.position.x + vel.x * dt, -HALF_W + 0.55, HALF_W - 0.55);
+    rig.position.z = clamp(rig.position.z + vel.z * dt, -(LENGTH - 24), 10);
     camera.position.y = EYE + (reduced ? 0 : Math.sin(performance.now() * 0.004) * 0.012 * vel.length());
   }
 
-  function tick() {
+  function tick(time, frame) {
     if (!running) return;
-    requestAnimationFrame(tick);
     const dt = Math.min(clock.getDelta(), 0.05);
-    resize();
+    const inXR = renderer.xr.isPresenting;
+    if (!inXR) resize();
 
-    if (dock.active) {
+    if (inXR) {
+      xrMove?.(dt, frame);
+    } else if (dock.active) {
       const k = reduced ? 1 : ease(dt, 5.5);
-      camera.position.lerp(dock.pos, k);
+      rig.position.lerp(dock.pos, k);
       yaw = lerp(yaw, dock.yaw, k);
       pitch = lerp(pitch, dock.pitch, k);
       vel.set(0, 0, 0);
@@ -635,8 +658,8 @@ export function createGallery(canvas, photos, hooks = {}) {
       // so the shot is never completely still.
       if (!reduced) drift += dt * 0.55;
       const target = 6 - (scrollT * 30 * SEG) - drift;
-      camera.position.z = lerp(camera.position.z, target, ease(dt, 2.2));
-      camera.position.x = lerp(camera.position.x, pointer.x * 0.75, ease(dt, 2));
+      rig.position.z = lerp(rig.position.z, target, ease(dt, 2.2));
+      rig.position.x = lerp(rig.position.x, pointer.x * 0.75, ease(dt, 2));
       camera.position.y = lerp(camera.position.y, EYE + pointer.y * 0.16 + (reduced ? 0 : Math.sin(drift * 1.6) * 0.02), ease(dt, 2));
       yaw = lerp(yaw, -pointer.x * 0.16, ease(dt, 2));
       pitch = lerp(pitch, pointer.y * 0.08, ease(dt, 2));
@@ -645,23 +668,24 @@ export function createGallery(canvas, photos, hooks = {}) {
     // Hold in front of each stop, but only once the camera has actually settled
     // there — otherwise a slow dock eats into the time you get to look at it.
     if (tour && tour.playing && focused !== null) {
-      if (camera.position.distanceTo(dock.pos) < 0.25) tour.held += dt;
+      if (rig.position.distanceTo(dock.pos) < 0.25) tour.held += dt;
       if (tour.held >= HOLD) {
         if (tour.at + 1 >= tour.stops.length) endTour();
         else stepTour(1);
       }
     }
 
-    camera.rotation.set(pitch, yaw, 0);
-    sky.position.copy(camera.position);
-    moonDisc.position.set(camera.position.x - 130, 220, camera.position.z + 90);
+    if (!inXR) camera.rotation.set(pitch, yaw, 0);   // in XR the headset decides
+    syncEye();
+    sky.position.copy(eye);
+    moonDisc.position.set(eye.x - 130, 220, eye.z + 90);
 
     // Stream textures, fade them in, breathe the glows.
     const t = performance.now() * 0.001;
     let best = Infinity, bestI = -1;
     for (let i = 0; i < artworks.length; i++) {
       const a = artworks[i];
-      const d = Math.abs(a.z - camera.position.z);
+      const d = Math.abs(a.z - eye.z);
       if (d < LOAD_D) want(a, 'thumb');
       else if (d > DROP_D && i !== focused) release(a);
 
@@ -678,7 +702,7 @@ export function createGallery(canvas, photos, hooks = {}) {
     if (bestI !== nearest) { nearest = bestI; hooks.onPass?.(bestI >= 0 ? artworks[bestI].photo : null, bestI); }
 
     // Hover highlight (skipped while docked — nothing else is clickable then).
-    if (focused === null && !dragging) {
+    if (focused === null && !dragging && !inXR) {
       raycaster.setFromCamera(document.pointerLockElement === canvas ? new THREE.Vector2(0, 0) : pointer, camera);
       const hit = raycaster.intersectObjects(pickables, false)[0];
       const idx = hit ? hit.object.userData.index : null;
@@ -695,17 +719,19 @@ export function createGallery(canvas, photos, hooks = {}) {
       let y = p.getY(i) + dt * 0.06;
       if (y > 5) y -= 5;
       p.setY(i, y);
-      const dz = p.getZ(i) - camera.position.z;
+      const dz = p.getZ(i) - eye.z;
       if (dz > DUST_D / 2) p.setZ(i, p.getZ(i) - DUST_D);
       else if (dz < -DUST_D / 2) p.setZ(i, p.getZ(i) + DUST_D);
     }
     p.needsUpdate = true;
 
-    renderer.render(scene, camera);
+    renderer.render(renderScene, camera);
   }
 
+  let xrMove = null;
+  let renderScene = scene;   // AR swaps in its own, so passthrough is not buried under a corridor
   resize();
-  tick();
+  renderer.setAnimationLoop(tick);
   hooks.onReady?.();
 
   return {
@@ -719,7 +745,7 @@ export function createGallery(canvas, photos, hooks = {}) {
     jumpTo(i) {
       endTour();
       const a = artworks[clamp(i, 0, artworks.length - 1)];
-      camera.position.set(0, EYE, a.z + 5);
+      rig.position.set(0, 0, a.z + 5);
       setMode('roam');
       focus(i);
     },
@@ -729,7 +755,24 @@ export function createGallery(canvas, photos, hooks = {}) {
     endTour,
     toggleTour() { if (tour) { tour.playing = !tour.playing; reportTour(); } },
     setStick: (x, y) => { stick.x = x; stick.y = y; },
+    /** Full-resolution texture for a photograph — used by the AR print. */
+    loadTexture: (url) => loader.loadAsync(url).then((t) => {
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.anisotropy = maxAniso;
+      return t;
+    }),
     count: artworks.length,
-    dispose() { running = false; renderer.dispose(); },
+    dispose() { running = false; renderer.setAnimationLoop(null); renderer.dispose(); },
+
+    /** What the XR layer needs to drive the same corridor from a headset. */
+    xr: {
+      renderer, scene, camera, rig,
+      focusAt: focus,
+      pickables,
+      photoAt: (i) => artworks[i]?.photo || null,
+      setMover(fn) { xrMove = fn; },
+      setScene(s) { renderScene = s || scene; },
+      corridor: { HALF_W, LENGTH, EYE },
+    },
   };
 }

@@ -6,6 +6,7 @@
  * with it. Adding a photograph never means editing this file.
  */
 import { createGallery } from './gallery.js';
+import { setupXR, xrSupport } from './xr.js';
 
 const $ = (sel) => document.querySelector(sel);
 const body = document.body;
@@ -55,10 +56,23 @@ async function boot() {
   }
 
   buildIndex(photos);
-  const gallery = createGallery($('#stage'), photos, hooks(photos));
-  wire(gallery);
-  buildWalks(walks, gallery);
   buildSearch(photos);
+
+  // No WebGL — an old phone, a locked-down browser, a blocklisted GPU. The
+  // index is a complete gallery on its own, so fall back to it rather than
+  // leaving the visitor staring at the loading screen forever.
+  let gallery = null;
+  try {
+    gallery = createGallery($('#stage'), photos, hooks(photos));
+  } catch (err) {
+    console.warn('WebGL unavailable — falling back to the flat gallery.', err);
+    body.classList.add('flat');
+  }
+  if (gallery) {
+    wire(gallery);
+    buildWalks(walks, gallery);
+    wireXR(gallery, photos);
+  }
   requestAnimationFrame(() => body.classList.add('ready'));
 }
 
@@ -156,12 +170,14 @@ function hooks(photos) {
     },
     onFocus(photo, i) {
       body.classList.toggle('plated', !!photo);
+      if (!photo) document.dispatchEvent(new CustomEvent('galiyaara:focus', { detail: { index: -1 } }));
       $('#plate').setAttribute('aria-hidden', photo ? 'false' : 'true');
       if (!photo) return;
       $('#plate-num').textContent = `${String(i + 1).padStart(2, '0')} / ${photos.length}`;
       $('#plate-title').textContent = photo.title;
       $('#plate-caption').textContent = photo.caption || '';
       $('#plate-caption').hidden = !photo.caption;
+      document.dispatchEvent(new CustomEvent('galiyaara:focus', { detail: { index: i } }));
     },
   };
 }
@@ -229,6 +245,56 @@ function wire(gallery) {
   });
 
   touchStick(gallery);
+}
+
+// ── Headsets ────────────────────────────────────────────────────────────────
+// Progressive enhancement: the buttons only appear once navigator.xr confirms
+// the mode is supported, so a phone, a laptop and a Quest all load the same
+// page and only the Quest sees the extra doors.
+async function wireXR(gallery, photos) {
+  const { vr, ar } = await xrSupport();
+  if (!vr && !ar) return;
+
+  const xr = setupXR(gallery.xr, {
+    onSession(mode) {
+      document.body.dataset.xr = mode || '';
+      $('#ar-hint').hidden = mode !== 'ar';
+      if (mode === 'vr') gallery.setMode('roam');
+    },
+    onPlaced() { $('#ar-hint').hidden = true; },
+  });
+
+  if (vr) {
+    const btn = $('#enter-vr');
+    btn.hidden = false;
+    btn.addEventListener('click', () => xr.enterVR());
+  }
+
+  if (ar) {
+    const btn = $('#enter-ar');
+    // Only offered while a photograph is actually open — "see it on your wall"
+    // has to mean a particular photograph.
+    document.addEventListener('galiyaara:focus', (e) => {
+      btn.hidden = e.detail.index < 0;
+      btn.dataset.index = String(e.detail.index);
+    });
+
+    btn.addEventListener('click', async () => {
+      const photo = photos[Number(btn.dataset.index)];
+      if (!photo) return;
+      btn.disabled = true;
+      btn.textContent = 'Loading the print…';
+      try {
+        const texture = await gallery.loadTexture(photo.large);
+        await xr.enterAR({ texture, aspect: photo.w / photo.h });
+      } catch (err) {
+        console.warn('could not start AR', err);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'See it on your wall';
+      }
+    });
+  }
 }
 
 // ── Virtual stick for touch ─────────────────────────────────────────────────

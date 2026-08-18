@@ -6,6 +6,9 @@ belongs here and what belongs in your fork.
 ## Wanted here
 
 - **The corridor** — rendering, lighting, camera feel, mobile controls, texture streaming.
+- **Headsets** — VR comfort, controller mappings, AR placement. This is the hardest part of
+  the project to test, so real-device reports are especially welcome: say which headset and
+  which browser.
 - **Performance** — anything measurable: fewer draw calls, faster first frame, smaller
   payload, better behaviour on low-end hardware. Say what you measured and on what.
 - **Accessibility** — keyboard paths, focus order, screen-reader labelling, reduced-motion,
@@ -40,8 +43,11 @@ oversight.
   and its output is committed (see [The curator](README.md#the-curator)). A PR that moves it
   into the browser will be closed regardless of how the key is hidden.
 - **A hard dependency on the AI.** Every AI-derived field has a non-AI fallback, and the site
-  must build, deploy and work with no `ANTHROPIC_API_KEY` at all. Keep it that way — most
-  forks will not set one.
+  must build, deploy and work with no AI key at all. Keep it that way — most forks will not
+  set one.
+- **A paid model, or a provider SDK.** The curator runs on free tiers through the plain
+  OpenAI-compatible HTTP shape, which is why it needs no dependency beyond `fetch`. Reaching
+  for a vendor SDK to use one provider's extras is not worth losing that.
 - **Post-processing (bloom, DOF, colour grading).** It blurs and recolours the photographs,
   which defeats the point of a photography site. The glow is additive geometry instead.
 - **A config file for the site's text.** `index.html` is authored by hand so the page has real
@@ -56,8 +62,9 @@ npm start        # http://localhost:5173
 npm test         # filename rules, metadata precedence, untrusted-curation guards
 ```
 
-`npm run curate` needs an `ANTHROPIC_API_KEY` and costs about a cent per photograph. You do
-not need it to work on anything else — without a key it skips itself, and `photos/curation.json`
+`npm run curate` needs a free key — `GROQ_API_KEY` or `OPENROUTER_API_KEY`, see
+[The curator](README.md#where-the-key-goes). You do not need one to work on anything else:
+without a key it skips itself, and `photos/curation.json`
 is already committed. **Don't commit a re-curation you didn't mean to**: check
 `git status photos/curation.json` before pushing.
 

@@ -96,6 +96,7 @@
       <p class="lede lede--tight">The whole collection hangs in a moonlit arcade rendered live in your browser. Walk it, stop where you like, step up to a frame.</p>
       <div class="hero-actions">
         <button class="btn btn--primary btn--lg" data-enter>Enter the corridor</button>
+        <button id="enter-vr" class="btn btn--lg" hidden>Enter in VR</button>
       </div>
       <div id="walks-wrap" hidden>
         <p class="label label--mid">Or take a curated walk</p>
@@ -181,6 +182,7 @@
     <button id="tour-stop" class="chip">Wander off</button>
   </div>
   <div id="joy" aria-hidden="true"><i></i></div>
+  <div id="ar-hint" hidden>Point at a wall, then tap to hang the print &mdash; 60&nbsp;cm on the long edge.</div>
 </div>
 
 <aside id="plate" aria-live="polite" aria-hidden="true">
@@ -192,6 +194,7 @@
     <button id="plate-prev" class="chip">&larr; Previous</button>
     <button id="plate-next" class="chip">Next &rarr;</button>
   </div>
+  <button id="enter-ar" class="chip" hidden>See it on your wall</button>
   <a class="plate-ig" href="https://www.instagram.com/ni_sh_a.char/" target="_blank" rel="noopener">More on Instagram &rarr;</a>
 </aside>
 

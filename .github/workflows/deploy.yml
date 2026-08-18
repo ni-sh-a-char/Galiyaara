@@ -28,15 +28,21 @@ jobs:
 
       - run: npm ci
 
-      # Claude looks at any newly-added photograph once and writes its title,
-      # caption, alt text and tags, then re-hangs the show. The result is
-      # committed back, so it is paid for once and inherited by every fork.
-      # Without the secret this step is a no-op and the build falls back to
+      # A free vision model looks at each newly-added photograph once and writes
+      # its title, caption, alt text and tags, then re-hangs the show. The result
+      # is committed back, so it is done once and inherited by every fork.
+      # With no key set this step is a no-op and the build falls back to
       # filename titles — a fork with no key still deploys.
       - name: Curate new photographs
         if: github.repository == 'ni-sh-a-char/Galiyaara'
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Set whichever ONE you have as a repository secret. All free tiers.
+          # First key present wins, in this order.
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          # Optional repository *variable*, for when a free model ID is retired.
+          GALIYAARA_AI_MODEL: ${{ vars.GALIYAARA_AI_MODEL }}
         run: npm run curate
 
       - name: Commit the curation

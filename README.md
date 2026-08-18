@@ -53,7 +53,7 @@ You can scroll past it like a normal page, or step inside and walk.
 
 Or don't steer at all: **take a curated walk** and the corridor moves you frame to frame
 along a route, holding in front of each photograph long enough to actually look at it. The
-walks, and the order everything hangs in, are written by Claude at build time — see
+walks, and the order everything hangs in, are written by a free AI model at build time — see
 [The curator](#the-curator).
 
 ---
@@ -67,13 +67,13 @@ cp ~/Pictures/new-shot.jpg photos/
 git add photos/ && git commit -m "add new-shot" && git push
 ```
 
-A minute later GitHub Actions has resized it, measured it, sampled its colour, **had Claude
+A minute later GitHub Actions has resized it, measured it, sampled its colour, **had a model
 look at it and write its title, caption, alt text and tags**, worked out where in the show it
 belongs, hung it and redeployed. **Nothing in the code mentions any individual photograph.**
 Deleting one works the same way — remove the file and push.
 
 **You always get the last word.** Anything you write in
-[`photos/captions.json`](photos/captions.json) beats what Claude wrote, field by field, and if
+[`photos/captions.json`](photos/captions.json) beats what the model wrote, field by field, and if
 there is no curation at all the title falls back to the filename — `night flower.jpg` becomes
 *Night Flower*.
 
@@ -96,7 +96,7 @@ The corridor is not tied to these photographs, or to this photographer. To run i
 1. **Fork**, then empty [`photos/`](photos/) and drop yours in. Delete `photos/captions.json`
    if you would rather every title came from the filename.
 2. **Replace** `public/assets/portrait.jpg` with your own portrait.
-3. **Optional: add an `ANTHROPIC_API_KEY`** secret so your photographs get written up too.
+3. **Optional: add a free AI key** as a secret so your photographs get written up too.
    Skip it and everything still works, just with filename titles. See
    [The curator](#the-curator).
 4. **Edit `public/index.html`** — it is a single hand-authored file, and every piece of you in
@@ -165,21 +165,21 @@ runtime third-party dependency and cannot be broken by someone else's outage.
 
 The interesting constraint: this is a static site on GitHub Pages. There is no server. Any
 AI call made from the browser would mean **shipping an API key to every visitor** — so the
-site makes none. Instead the whole AI pass happens once, at build time, and its output is
-committed to the repository:
+site makes none. The whole AI pass happens once, at build time, and its output is committed
+to the repository:
 
 ```
-photos/new-shot.jpg  ──►  [ build ]  ──►  photos/curation.json  ──►  photos.json  ──►  the corridor
-                              │                (committed)
-                              └── Claude looks at the photograph, once, ever
+photos/new-shot.jpg  ──►  [ CI ]  ──►  photos/curation.json  ──►  photos.json  ──►  the corridor
+                             │              (committed)
+                             └── a model looks at the photograph, once, ever
 ```
 
 [`tools/curate.mjs`](tools/curate.mjs) makes two kinds of call:
 
-1. **Per photograph** — Claude is shown a 512 px copy and returns a title for the brass
+1. **Per photograph** — the model is shown a 512 px copy and returns a title for the brass
    plaque, a one-line caption, **alt text**, 6–10 search tags, and a mood. Cached against the
    source file's content hash, so a photograph is never looked at twice.
-2. **Over the whole collection** — Claude sequences every photograph into the corridor so
+2. **Over the whole collection** — it sequences every photograph into the corridor so
    neighbours talk to each other, and writes five guided walks through them. Re-runs only
    when the collection actually changes.
 
@@ -192,29 +192,73 @@ What that buys, concretely:
 | No alt text to write, ever | Search that understands *"night"*, *"stray dog"*, *"waiting"* |
 | Override anything by hand, any time | Guided walks for anyone who doesn't want to steer |
 
-**Cost:** roughly **$0.01 per photograph, once** — about $1 for a hundred, plus a few cents
-to re-hang. Subsequent builds cost nothing because the curation is committed. That last part
-also means **forks inherit the curation for free**, and reviewers can read the diff and
-correct anything they disagree with.
+### Where the key goes
 
-**It is optional.** With no `ANTHROPIC_API_KEY` the curate step exits quietly, the build falls
-back to filename titles, and the walks and search UI simply don't render. A fork with no key
-still builds and still deploys. To turn it on, add the key at **Settings → Secrets and
-variables → Actions**, or run it yourself:
+**It runs on free models only.** Everything below speaks the OpenAI `/chat/completions`
+shape, so there is one client for all of them and no SDK at all — `fetch` and nothing else.
+Pick **one**, grab a free key, and set it as a repository secret:
+
+**GitHub → your repo → Settings → Secrets and variables → Actions → New repository secret**
+
+| Provider | Secret name | Default free model | Sees images? |
+|---|---|---|---|
+| **[Groq](https://console.groq.com/keys)** *(recommended)* | `GROQ_API_KEY` | `qwen/qwen3.6-27b` | ✅ |
+| **[OpenRouter](https://openrouter.ai/keys)** | `OPENROUTER_API_KEY` | `google/gemma-4-31b-it:free` | ✅ |
+| **[OpenCode Zen](https://opencode.ai/zen)** | `OPENCODE_API_KEY` | `nemotron-3-ultra-free` | ❌ text only |
+
+Whichever key is present wins, in that order. **OpenCode Zen's free models are coding models
+and cannot see images** — it will still hang the show and write the walks, but it can't
+describe a photograph, so use Groq or OpenRouter if you want captions.
+
+Free model IDs get retired regularly. When one does, pin a new one without touching the code
+— add a repository **variable** (not a secret) named `GALIYAARA_AI_MODEL`. Any other
+OpenAI-compatible endpoint works too, via `GALIYAARA_AI_BASE_URL` + `GALIYAARA_AI_KEY`.
+
+Locally it is the same environment variable:
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
-npm run curate          # only looks at photographs it hasn't seen
-npm run curate -- --force   # re-do everything
+export GROQ_API_KEY=gsk_...        # or OPENROUTER_API_KEY=sk-or-...
+npm run curate                     # only looks at photographs it hasn't seen
+npm run curate -- --force          # re-do everything
 ```
 
-Two design notes worth stealing. **The model's output is untrusted input** — a hallucinated
-slug must not create a phantom frame, and a photograph the model forgets must not vanish from
-the gallery, so `reconcileShow()` validates the order against the real slug list and appends
-anything missing ([tested](tools/build.test.mjs)). And **the human always wins**: precedence is
-hand-written → Claude → filename, never the other way round.
+Running it locally first is the better habit: `photos/curation.json` is a plain diff you can
+read and correct before anyone sees it.
+
+**It is optional.** With no key at all the curate step exits quietly, the build falls back to
+filename titles, and the walks and search UI simply don't render. A fork with no key still
+builds and still deploys.
+
+Three design notes worth stealing. **Free models don't do strict schemas or reliable tool
+calls**, so the code asks for JSON, extracts the first balanced object out of whatever prose
+and code fences come back, and coerces every field to the type the site renders —
+`parseJson()` and `normalizePhoto()`. **The model's output is untrusted input**: a
+hallucinated slug must not create a phantom frame, and a photograph the model forgets must
+not vanish from the gallery, so `reconcileShow()` validates the order against the real slug
+list and appends anything missing. And **a run where every request fails is an error, not an
+empty result** — a bad key fails the build loudly instead of quietly deploying an uncurated
+site forever. All three are [tested](tools/build.test.mjs).
 
 ---
+
+## Devices
+
+The corridor is one WebGL scene, so it renders anywhere WebGL does — and the site is built to
+survive the places it doesn't.
+
+| | |
+|---|---|
+| **Phones** | Drag to look, on-screen thumbstick to walk, tap a frame. Layout verified from 320 px up; safe-area insets so nothing hides under a notch or home indicator. Type is sized on height as well as width, so landscape doesn't crop the title. |
+| **Tablets** | Same touch controls. Any coarse-pointer device takes the lighter render path — a 2×-DPR tablet asking for a 2048×2732 buffer is how you get eight frames a second. |
+| **Desktop** | `WASD` + drag-look, double-click for pointer lock, keyboard-navigable throughout. |
+| **VR** *(Quest, Vision Pro, any WebXR headset)* | **Enter in VR** in the gallery section. Thumbstick walks relative to where you're looking, snap-turn to spin without nausea, trigger to step up to a frame. The corridor was always room-scale; the headset just puts you in it. |
+| **AR** *(WebXR phones and headsets)* | Open a photograph and press **See it on your wall**. A reticle finds a real surface, and a tap hangs that print — framed, at **60 cm** on the long edge, so you can judge it at the size you'd actually buy. |
+| **No WebGL** | Old phones, locked-down browsers, blocklisted GPUs. The site drops to a flat gallery with every photograph still browsable and searchable, rather than hanging on a loading screen. |
+| **Reduced motion** | `prefers-reduced-motion` stills the camera drift, the typewriter and the transitions. |
+
+Tap targets meet **WCAG 2.2 AA** (24 px) everywhere and 44 px on touch. The XR buttons only
+exist once `navigator.xr` confirms the mode is supported, so every other device loads the
+same page and simply never sees them.
 
 ## Run it locally
 
@@ -274,8 +318,9 @@ Fork the corridor freely. Bring your own photographs.
 ## Credits
 
 Photographs by [**ni_sh_a.char**](https://www.instagram.com/ni_sh_a.char/).
-Built with [three.js](https://threejs.org) (MIT, vendored),
-[sharp](https://sharp.pixelplumbing.com), and [Claude](https://claude.com) as the curator. Type is Cormorant Garamond, Inter and Tiro
+Built with [three.js](https://threejs.org) (MIT, vendored) and
+[sharp](https://sharp.pixelplumbing.com). Curated by free models via
+[Groq](https://groq.com) or [OpenRouter](https://openrouter.ai). No runtime dependencies. Type is Cormorant Garamond, Inter and Tiro
 Devanagari Hindi. Also by the same hand: [suna_ai](https://piyush-mishra-00.github.io/suna_ai/#/).
 
 <div align="center"><br>
