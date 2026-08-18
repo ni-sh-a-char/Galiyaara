@@ -1,0 +1,14 @@
+The photographs in this directory, and in public/assets/ and docs/media/, are
+NOT covered by the MIT license in the root of this repository.
+
+    Copyright (c) ni_sh_a.char. All rights reserved.
+
+The MIT license applies to the source code only — everything in public/css,
+public/js, public/vendor, tools/, and the build and deploy configuration.
+
+You are welcome to fork this repository and run the gallery with photographs of
+your own. Delete the contents of photos/ and put yours in its place. What you
+may not do without written permission is copy, redistribute, republish, train
+on, print, sell, or otherwise use these photographs.
+
+To ask for permission, message https://www.instagram.com/ni_sh_a.char/

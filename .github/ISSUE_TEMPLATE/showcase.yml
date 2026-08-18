@@ -1,0 +1,25 @@
+name: Show your corridor
+description: You forked it and filled it with your own photographs — post it here
+title: "Showcase: "
+labels: [showcase]
+body:
+  - type: markdown
+    attributes:
+      value: Forking this for your own work is the point. Show us what it looks like.
+  - type: input
+    id: url
+    attributes:
+      label: Link to your gallery
+      placeholder: https://your-name.github.io/your-repo/
+    validations:
+      required: true
+  - type: input
+    id: who
+    attributes:
+      label: Who you are
+      description: Name or handle, and where people can find more of your photographs.
+  - type: textarea
+    id: changed
+    attributes:
+      label: What you changed
+      description: Different corridor, different lighting, something we hadn't thought of? Screenshots welcome.

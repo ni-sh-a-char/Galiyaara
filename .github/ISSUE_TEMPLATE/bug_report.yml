@@ -1,0 +1,45 @@
+name: Bug report
+description: Something in the corridor, the page or the build is wrong
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you expected, and what you got instead. For anything visual, a screenshot or short capture is worth more than a paragraph.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to reproduce
+      placeholder: |
+        1. Open the site
+        2. Click "Enter the corridor"
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      options:
+        - The live site
+        - A local build (npm start)
+        - My own fork
+        - Both live and local
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Browser, OS and GPU
+      placeholder: Chrome 141, Windows 11, RTX 3060 / Safari 18, iPhone 14
+    validations:
+      required: true
+  - type: textarea
+    id: console
+    attributes:
+      label: Console output
+      description: Anything red in the browser console. Leave blank if there's nothing.
+      render: text

@@ -1,32 +1,73 @@
+<div align="center">
+
 # Galiyaara · गलियारा
 
-A walk-through gallery of photographs by [**ni_sh_a.char**](https://www.instagram.com/ni_sh_a.char/).
+**A photography portfolio you walk through instead of scroll.**
 
-*Galiyaara* means corridor. The site is one — a moonlit stone arcade rendered live in the
-browser, with the photographs hung between the arches. You can scroll past it, or step
-inside and walk it.
+*Galiyaara* means corridor. So the site is one — a moonlit stone arcade rendered live in
+your browser, with the photographs hung between the arches. No embed, no gallery service,
+no build framework. Drop a photo in a folder, push, and it is on the wall.
 
-**Live:** https://ni-sh-a-char.github.io/Galiyaara/
+[**→ Walk it**](https://ni-sh-a-char.github.io/Galiyaara/) &nbsp;·&nbsp;
+[Photographs by ni_sh_a.char](https://www.instagram.com/ni_sh_a.char/)
+
+[![Deploy](https://github.com/ni-sh-a-char/Galiyaara/actions/workflows/deploy.yml/badge.svg)](https://github.com/ni-sh-a-char/Galiyaara/actions/workflows/deploy.yml)
+[![Code: MIT](https://img.shields.io/badge/code-MIT-c9a86a)](LICENSE)
+[![Photographs: © all rights reserved](https://img.shields.io/badge/photographs-%C2%A9%20all%20rights%20reserved-8d7648)](photos/LICENSE)
+[![three.js](https://img.shields.io/badge/three.js-r180-informational)](https://threejs.org)
+![No build framework](https://img.shields.io/badge/build%20framework-none-brightgreen)
+
+<img src="docs/media/walk.webp" alt="Walking down the Galiyaara corridor, photographs lit on both walls, arches receding into night fog" width="820">
+
+</div>
 
 ---
 
-## Adding a photograph
+## What this is
+
+Most photography sites are a grid. This one is a place. You arrive at the mouth of an
+arcade at night, the corridor runs off into fog, and every photograph is lit where it hangs.
+You can scroll past it like a normal page, or step inside and walk.
+
+<table>
+<tr>
+<td width="50%"><img src="docs/media/hero.webp" alt="The entrance to the corridor with the title Galiyaara"></td>
+<td width="50%"><img src="docs/media/focus.webp" alt="Camera docked in front of a single framed photograph with a brass plaque beneath it"></td>
+</tr>
+<tr>
+<td><b>Arrive.</b> Scroll pulls the camera down the corridor while the page reads over it.</td>
+<td><b>Step up to a frame.</b> Click one and the camera docks; the full-resolution file loads.</td>
+</tr>
+<tr>
+<td><img src="docs/media/index.webp" alt="A grid index of every photograph in the collection"></td>
+<td><img src="docs/media/about.webp" alt="The about section"></td>
+</tr>
+<tr>
+<td><b>Or take the index.</b> Every frame, keyboard-navigable. Click one to be set down in front of it inside the corridor.</td>
+<td><b>Reads as a site, too.</b> The 3D never gets in the way of the words.</td>
+</tr>
+</table>
+
+**Controls** — `W` `A` `S` `D` walk · drag to look · click a frame · `←` `→` next/previous ·
+`esc` step back · double-click for pointer lock · thumbstick on touch.
+
+---
+
+## Add a photograph
 
 Put the file in [`photos/`](photos/) and push. That is the whole procedure.
 
 ```bash
 cp ~/Pictures/new-shot.jpg photos/
-git add photos/new-shot.jpg
-git commit -m "add new-shot"
-git push
+git add photos/ && git commit -m "add new-shot" && git push
 ```
 
-Within a minute or two GitHub Actions has resized it, measured it, sampled its colour,
-hung it on the next free stretch of wall and redeployed the site. Nothing in the code
-mentions any individual photograph.
+A minute later GitHub Actions has resized it, measured it, sampled its colour, hung it on the
+next free stretch of wall and redeployed. **Nothing in the code mentions any individual
+photograph.** Deleting one works the same way — remove the file and push.
 
-**Titles** come from the filename — `night flower.jpg` becomes *Night Flower*. To override
-one, or to give a photograph a caption, add it to [`photos/captions.json`](photos/captions.json):
+**Titles** come from the filename: `night flower.jpg` becomes *Night Flower*. Override one, or
+add a caption, in [`photos/captions.json`](photos/captions.json):
 
 ```json
 {
@@ -35,90 +76,142 @@ one, or to give a photograph a caption, add it to [`photos/captions.json`](photo
 }
 ```
 
-Deleting a photograph works the same way: remove the file, push, and it is off the wall.
-
-Accepted formats: `.jpg` `.jpeg` `.png` `.webp` `.avif` `.tif` `.tiff`.
-Upload the biggest version you have — the build makes its own web-sized copies and never
-ships the original.
+Accepted: `.jpg` `.jpeg` `.png` `.webp` `.avif` `.tif` `.tiff`. Upload the biggest version you
+have — the build makes its own web-sized copies and never ships the original.
 
 ---
 
-## Running it locally
+## Make it yours
+
+The corridor is not tied to these photographs, or to this photographer. To run it with your own:
+
+1. **Fork**, then empty [`photos/`](photos/) and drop yours in. Delete `photos/captions.json`
+   if you would rather every title came from the filename.
+2. **Replace** `public/assets/portrait.jpg` with your own portrait.
+3. **Edit `public/index.html`** — it is a single hand-authored file, and every piece of you in
+   it is in plain sight: `<title>`, the `og:` meta tags, the nav links, the hero, the About
+   copy, the Instagram links, the footer. Search for `ni_sh_a.char` and you will find them all.
+4. **Update the licences.** [`photos/LICENSE`](photos/LICENSE) reserves *these* photographs;
+   put your own terms there. `LICENSE` (MIT) covers the code and you can keep it as is.
+5. **Settings → Pages → Source → GitHub Actions.** Push, and you are live.
+
+Everything else — corridor length, layout, colour, streaming — derives from your photographs
+automatically. If you build one, open an issue; a wall of forks is the best thing that could
+happen to this repo.
+
+---
+
+## How it works
+
+Three moving parts, none of them a framework.
+
+### 1. The build turns a folder into a manifest
+
+[`tools/build.mjs`](tools/build.mjs) copies `public/` verbatim, then for each photograph
+writes a 720 px wall texture and a 2200 px close-up, and records its dimensions, average
+colour and title into `dist/photos.json`. A content hash per file — not a timestamp, which a
+fresh `git checkout` destroys — means unchanged photographs are never re-encoded. One
+dependency: [sharp](https://sharp.pixelplumbing.com).
+
+### 2. The corridor is generated from that manifest
+
+[`public/js/gallery.js`](public/js/gallery.js) reads `photos.json` and builds the scene, so the
+arcade is exactly as long as your collection. Three decisions worth stealing:
+
+**The photographs are unlit.** They use `MeshBasicMaterial` with tone mapping off, so what
+you see on the wall is the file's own colour — not a relit approximation of it. For a
+photography site that is the whole point: a lighting model that "improves" the photograph is
+a lighting model that lies about it. Everything that *looks* like light coming off a frame —
+the wash on the plaster, the pool on the floor, the shaft from the lamp — is additive
+geometry tinted with that photograph's own average colour. Cheap, and honest.
+
+**Textures stream by distance.** A frame starts as a flat rectangle in its average colour
+(straight from the manifest, so it is the right colour before anything downloads), pulls in
+its 720 px texture within 72 m, swaps to the 2200 px one when you step up to it, and is
+released past 120 m. Walking the full corridor never holds more than a dozen textures, so a
+collection of 100 costs the same as a collection of 1000.
+
+**No post-processing.** Bloom would look spectacular and would blur and wash the
+photographs, which is the wrong trade here. The glow is geometry instead. The only real
+lights in the scene are the moon and a sky-derived environment map; the arches are one
+instanced mesh; the dust wraps around the camera rather than filling the corridor. It runs
+on a phone.
+
+### 3. The page floats over the same canvas
+
+[`public/js/main.js`](public/js/main.js) wires it up. Scrolling drives the camera; *Enter the
+corridor* hides the page and hands you the controls; clicking a frame docks you in front of
+it. The `#portfolio` grid is a flat, keyboard-navigable index of every photograph — it is the
+accessible path for anyone who can't or doesn't want the 3D view, and it is also the fastest
+way *into* the corridor at a chosen frame. `prefers-reduced-motion` stills the camera.
+
+three.js is **vendored** in `public/vendor/`, not pulled from a CDN, so the site has no
+runtime third-party dependency and cannot be broken by someone else's outage.
+
+---
+
+## Run it locally
 
 ```bash
 npm install
 npm start          # builds, then serves on http://localhost:5173
-```
-
-Or `npm run build` on its own to produce `dist/` without serving. The first build
-re-encodes every photograph (about a minute for 100); after that only changed files are
-touched, so rebuilds take a few seconds.
-
-```bash
+npm run build      # just build dist/
 npm test           # checks the filename → slug → title rules
 ```
 
----
-
-## How it fits together
+The first build re-encodes everything (about a minute for 100 photographs). After that only
+changed files are touched, so rebuilds take a few seconds.
 
 ```
-photos/                  every photograph, at whatever size you shot it
-photos/captions.json     optional title/caption overrides
+photos/                  your photographs, at whatever size you shot them
+  captions.json          optional title/caption overrides
+  LICENSE                the photographs are NOT MIT — see below
 public/                  the site, served as-is
-  index.html
+  index.html             hand-authored, no templating
   css/site.css
   js/main.js             page wiring: index grid, HUD, modes
-  js/gallery.js          the corridor — geometry, lighting, camera, streaming
-  vendor/                three.js, vendored (no CDN at runtime)
-  assets/portrait.jpg
+  js/gallery.js          the corridor
+  vendor/                three.js, vendored
 tools/build.mjs          photos/ + public/ → dist/
 tools/build.test.mjs
-.github/workflows/       build + deploy to GitHub Pages on every push to main
+.github/workflows/       build + deploy to Pages on every push to main
 dist/                    build output, git-ignored
 ```
 
-**The build** ([`tools/build.mjs`](tools/build.mjs)) copies `public/` verbatim, then for every
-photograph writes a 720px wall texture and a 2200px close-up, and records its dimensions,
-average colour and title in `dist/photos.json`. A content hash per file means unchanged
-photographs are never re-encoded.
+---
 
-**The corridor** ([`public/js/gallery.js`](public/js/gallery.js)) reads that manifest and builds
-the scene from it — so its length is however many photographs exist. Design notes:
+## Contributing
 
-- **The photographs are unlit.** They use `MeshBasicMaterial` with tone mapping off, so what
-  you see on the wall is the file's own colour, not a relit approximation of it. Everything
-  that looks like light coming off a frame — the wash on the plaster, the pool on the floor,
-  the shaft from the lamp — is additive geometry tinted with that photograph's average colour.
-  The only real lights in the scene are the moon and a sky-derived environment map.
-- **Textures stream.** A frame starts as a flat rectangle in its own average colour, pulls in
-  its 720px texture within 72 m, swaps to the 2200px one when you step up to it, and is
-  released past 120 m. Walking the full corridor never holds more than a dozen textures.
-- **Arches are instanced**, dust wraps around the camera rather than filling the corridor, and
-  there is no post-processing pass. It runs on a phone.
-
-**The page** sits over the same canvas. Scrolling pulls the camera down the corridor;
-*Enter the corridor* hides the page and hands you `WASD` + drag-look (plus a thumbstick on
-touch); clicking a frame docks the camera in front of it. The `#portfolio` grid is a flat,
-keyboard-navigable index of every photograph — it doubles as the accessible path for anyone
-who can't or doesn't want to use the 3D view, and clicking a tile sets you down in front of
-that frame inside the corridor.
+Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for what fits
+and what doesn't. Short version: improvements to the corridor, the build, performance and
+accessibility are wanted; changes to *this photographer's* copy, photographs or Instagram
+links belong in your fork rather than here.
 
 ---
 
-## Deployment
+## Licence
 
-Pushing to `main` runs [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml), which
-builds `dist/` and publishes it to GitHub Pages. One-time setup: **Settings → Pages →
-Source → GitHub Actions**.
+Two licences, and the distinction matters:
+
+| | |
+|---|---|
+| **Source code** — `public/css`, `public/js`, `tools/`, workflows, config | [MIT](LICENSE). Take it, fork it, ship it. |
+| **Photographs** — `photos/`, `public/assets/`, `docs/media/` | [© ni_sh_a.char, all rights reserved](photos/LICENSE). Not yours to redistribute. |
+
+Fork the corridor freely. Bring your own photographs.
 
 ---
 
 ## Credits
 
-Photographs © ni_sh_a.char. [three.js](https://threejs.org) (MIT) is vendored in
-`public/vendor/`; type is Cormorant Garamond, Inter and Tiro Devanagari Hindi.
+Photographs by [**ni_sh_a.char**](https://www.instagram.com/ni_sh_a.char/).
+Built with [three.js](https://threejs.org) (MIT, vendored) and
+[sharp](https://sharp.pixelplumbing.com). Type is Cormorant Garamond, Inter and Tiro
+Devanagari Hindi. Also by the same hand: [suna_ai](https://piyush-mishra-00.github.io/suna_ai/#/).
 
-The photographs previously lived in a separate `Galiyaara-Resources` repository and the 3D
-gallery was an embedded third-party viewer. Both are gone: everything now lives here, and
-the corridor is the site's own.
+<div align="center"><br>
+
+*Shauk-ai-Deedar hai toh Nazar paida keejiye,*<br>
+*Mayine toh kayi hain Janab sabar paida keejiye.*
+
+</div>

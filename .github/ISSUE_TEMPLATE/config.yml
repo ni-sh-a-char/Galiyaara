@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Ask about the photographs
+    url: https://www.instagram.com/ni_sh_a.char/
+    about: Prints, licensing or permission to use a photograph — message the photographer directly, not the issue tracker.
+  - name: Read the constraints first
+    url: https://github.com/ni-sh-a-char/Galiyaara/blob/main/CONTRIBUTING.md
+    about: No bundler, no CDN, no post-processing, no new dependencies. Each was a decision — check before proposing one.
