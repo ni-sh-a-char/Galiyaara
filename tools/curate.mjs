@@ -165,7 +165,14 @@ async function chat(provider, messages, { maxTokens = 1200, tries = 5 } = {}) {
     // the daily quota saying come back tomorrow. Sleeping through that would
     // hang CI for hours (it did), so stop and keep what we already have.
     if (res.status === 429 && Number.isFinite(after) && after > MAX_BACKOFF) {
-      throw new OutOfQuota(`${provider.label} daily quota reached — it asked for ${Math.round(after / 60)} min`);
+      // Providers name the limit they are enforcing (per-minute, per-day,
+      // tokens vs requests) in the body. Pass it through — without it you
+      // cannot tell "wait a minute" from "wait until tomorrow".
+      const why = (await res.text().catch(() => '')).slice(0, 200).replace(/\s+/g, ' ').trim();
+      throw new OutOfQuota(
+        `${provider.label} rate-limited — asked for ${Math.round(after / 60)} min`
+        + (why ? `. ${why}` : '')
+      );
     }
 
     const retryable = res.status === 429 || res.status >= 500;
