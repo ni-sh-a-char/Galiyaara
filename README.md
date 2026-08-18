@@ -206,9 +206,16 @@ Pick **one**, grab a free key, and set it as a repository secret:
 | **[OpenRouter](https://openrouter.ai/keys)** | `OPENROUTER_API_KEY` | `google/gemma-4-31b-it:free` | ✅ |
 | **[OpenCode Zen](https://opencode.ai/zen)** | `OPENCODE_API_KEY` | `nemotron-3-ultra-free` | ❌ text only |
 
-Whichever key is present wins, in that order. **OpenCode Zen's free models are coding models
-and cannot see images** — it will still hang the show and write the walks, but it can't
-describe a photograph, so use Groq or OpenRouter if you want captions.
+**Set as many as you like — they chain.** No free allowance covers a hundred photographs in
+one window, so when the first provider answers `429, come back later`, whatever is left is
+handed to the next key instead of waiting a day. Setting both Groq *and* OpenRouter roughly
+doubles how much gets described per run. Progress is saved after **every** photograph, and a
+nightly run resumes wherever the last one stopped, so a large collection finishes over a few
+days with nobody watching.
+
+**OpenCode Zen's free models are coding models and cannot see images** — it will still hang
+the show and write the walks, but it can't describe a photograph, so pair it with Groq or
+OpenRouter rather than using it alone.
 
 Free model IDs get retired regularly. When one does, pin a new one without touching the code
 — add a repository **variable** (not a secret) named `GALIYAARA_AI_MODEL`. Any other

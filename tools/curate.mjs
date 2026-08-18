@@ -77,33 +77,47 @@ export const PROVIDERS = {
   },
 };
 
-/** Whichever free provider has a key set, unless one was named explicitly. */
-export function pickProvider(env = process.env) {
+/**
+ * Every free provider with a key, in the order we will try them. One free tier
+ * cannot describe a hundred photographs in a single allowance window, so when
+ * the first runs dry we move to the next rather than stopping for the day.
+ *
+ * GALIYAARA_AI_MODEL only overrides the *first* provider's model — it would be
+ * meaningless applied to a fallback running on a different service.
+ */
+export function pickProviders(env = process.env) {
   const named = env.GALIYAARA_AI_PROVIDER;
 
   if (named === 'custom' || (!named && env.GALIYAARA_AI_BASE_URL && env.GALIYAARA_AI_KEY)) {
     if (!env.GALIYAARA_AI_BASE_URL || !env.GALIYAARA_AI_KEY) {
       throw new Error('custom provider needs both GALIYAARA_AI_BASE_URL and GALIYAARA_AI_KEY');
     }
-    return {
+    return [{
       label: 'custom', vision: true, key: env.GALIYAARA_AI_KEY,
       base: env.GALIYAARA_AI_BASE_URL.replace(/\/$/, ''),
       model: env.GALIYAARA_AI_MODEL || 'unset',
-    };
+    }];
   }
 
+  // Naming one provider means that one only — no silent fallback to another
+  // service when you asked for a specific one.
   if (named) {
     const p = PROVIDERS[named];
     if (!p) throw new Error(`unknown GALIYAARA_AI_PROVIDER "${named}" — one of: ${Object.keys(PROVIDERS).join(', ')}, custom`);
     if (!env[p.env]) throw new Error(`GALIYAARA_AI_PROVIDER=${named} but ${p.env} is not set`);
-    return { ...p, key: env[p.env], model: env.GALIYAARA_AI_MODEL || p.model };
+    return [{ ...p, key: env[p.env], model: env.GALIYAARA_AI_MODEL || p.model }];
   }
 
-  for (const p of Object.values(PROVIDERS)) {
-    if (env[p.env]) return { ...p, key: env[p.env], model: env.GALIYAARA_AI_MODEL || p.model };
-  }
-  return null;
+  const found = Object.values(PROVIDERS).filter((p) => env[p.env]);
+  return found.map((p, i) => ({
+    ...p,
+    key: env[p.env],
+    model: (i === 0 && env.GALIYAARA_AI_MODEL) || p.model,
+  }));
 }
+
+/** The provider we would start with, or null if no key is set anywhere. */
+export const pickProvider = (env = process.env) => pickProviders(env)[0] || null;
 
 /** The free tier's allowance is spent. Not a failure — just "come back later". */
 export class OutOfQuota extends Error {}
@@ -360,9 +374,10 @@ export async function loadCuration(file = CURATION) {
 
 async function main() {
   const force = process.argv.includes('--force');
-  let quotaGone = false;
-  const provider = pickProvider();
-  console.log(`curating via ${provider.label} — ${provider.model}`);
+  const chain = pickProviders();
+  console.log(chain.length === 1
+    ? `curating via ${chain[0].label} — ${chain[0].model}`
+    : `curating via ${chain.map((p) => `${p.label} (${p.model})`).join(' → then ')}`);
 
   const curation = await loadCuration();
   curation.photos ||= {};
@@ -396,53 +411,70 @@ async function main() {
     }
   }
 
-  if (todo.length && !provider.vision) {
-    console.warn(`  !  ${provider.label}'s free models cannot see images — skipping the per-photograph pass.`);
-    console.warn('     Use Groq or OpenRouter for that, or point GALIYAARA_AI_MODEL at a vision model.');
-  } else if (todo.length) {
-    console.log(`looking at ${todo.length} photograph${todo.length === 1 ? '' : 's'}…`);
-    let done = 0;
-    const failures = [];
+  // Each provider gets a pass at whatever is still undescribed. When one runs
+  // dry we hand the remainder to the next rather than stopping for the day.
+  const seers = chain.filter((p) => p.vision);
+  if (todo.length && !seers.length) {
+    console.warn(`  !  none of the keys set can see images (${chain.map((p) => p.label).join(', ')}).`);
+    console.warn('     Add GROQ_API_KEY or OPENROUTER_API_KEY for the per-photograph pass.');
+  }
 
-    await pool(CONCURRENCY, todo, async (p) => {
-      if (quotaGone) return;              // no point queueing more of the same
+  let done = 0;
+  let exhausted = 0;
+  const failures = [];
+
+  for (const provider of seers) {
+    const left = todo.filter((p) => curation.photos[p.slug]?.stamp !== p.stamp);
+    if (!left.length) break;
+
+    let dry = false;
+    console.log(`looking at ${left.length} photograph${left.length === 1 ? '' : 's'} via ${provider.label}…`);
+
+    await pool(CONCURRENCY, left, async (p) => {
+      if (dry) return;                    // no point queueing more of the same
       try {
         const meta = await describe(provider, path.join(SRC, p.file), p.file, titleize(p.slug));
         curation.photos[p.slug] = { stamp: p.stamp, ...meta };
         // Save as we go. A free tier will not get through a hundred
-        // photographs in one day, and an interrupted run must not throw away
-        // the ones it did manage — the next run picks up where this stopped.
+        // photographs in one window, and an interrupted run must not throw
+        // away the ones it managed — the next run resumes from here.
         await save(curation);
         console.log(`  ${(++done).toString().padStart(3)}/${todo.length}  ${p.slug} — "${meta.title}"`);
       } catch (err) {
         if (err instanceof OutOfQuota) {
-          if (!quotaGone) console.warn(`  …  ${err.message}. Stopping here; run again later to continue.`);
-          quotaGone = true;
+          if (!dry) console.warn(`  …  ${err.message}`);
+          dry = true;
           return;
         }
         // One bad photograph must not lose the other 102. It simply stays
         // uncurated and falls back to its filename title.
-        failures.push(err.message);
+        failures.push({ provider, message: err.message });
         console.warn(`  !  ${p.slug}: ${err.message}`);
       }
     });
 
-    const left = todo.length - done;
-    if (quotaGone) {
-      console.log(`  ${done} curated this run, ${left} still to do — the daily allowance resets, so just run it again.`);
-    }
+    if (!dry) break;                      // finished without hitting a wall
+    exhausted++;
+  }
 
-    // Nothing succeeded and it was not a quota wall: that is a broken key, a
-    // wrong model id, or an outage. Fail loudly rather than quietly deploying
-    // an uncurated site forever.
-    if (!done && !quotaGone && failures.length) {
-      throw new Error(
-        `all ${failures.length} request(s) to ${provider.label} failed. First error:\n`
-        + `    ${failures[0]}\n`
-        + `  Check ${provider.env || 'GALIYAARA_AI_KEY'}, and that "${provider.model}" is a model `
-        + 'your account can use (free model IDs change — set GALIYAARA_AI_MODEL to override).'
-      );
-    }
+  const outstanding = todo.filter((p) => curation.photos[p.slug]?.stamp !== p.stamp).length;
+  const walled = exhausted > 0 && outstanding > 0;
+  if (walled) {
+    console.log(`  ${done} curated this run, ${outstanding} still to do — every key is rate-limited for now.`);
+    console.log('     The allowances reset; the nightly run picks up from here.');
+  }
+
+  // Nothing succeeded and nobody was rate-limited: that is a broken key, a
+  // retired model id, or an outage. Fail loudly rather than quietly deploying
+  // an uncurated site forever.
+  if (todo.length && !done && !exhausted && failures.length) {
+    const { provider, message } = failures[0];
+    throw new Error(
+      `all ${failures.length} request(s) failed. First error, from ${provider.label}:\n`
+      + `    ${message}\n`
+      + `  Check ${provider.env || 'GALIYAARA_AI_KEY'}, and that "${provider.model}" is a model `
+      + 'your account can use (free model IDs change — set GALIYAARA_AI_MODEL to override).'
+    );
   }
 
   const entries = all
@@ -451,10 +483,13 @@ async function main() {
   const key = hangKeyOf(entries);
 
   // No point re-hanging a show that is still half-written.
-  if (entries.length && !quotaGone && (force || key !== curation.hangKey)) {
-    console.log(`hanging the show — ${entries.length} photographs…`);
+  if (entries.length && !walled && (force || key !== curation.hangKey)) {
+    // The hang pass is text-only, so any provider will do — including one whose
+    // free models cannot see.
+    const hanger = chain[Math.min(exhausted, chain.length - 1)];
+    console.log(`hanging the show — ${entries.length} photographs via ${hanger.label}…`);
     try {
-      const show = reconcileShow(await hangShow(provider, entries), entries.map((e) => e.slug));
+      const show = reconcileShow(await hangShow(hanger, entries), entries.map((e) => e.slug));
       curation.hang = show.hang;
       curation.walks = show.walks;
       curation.hangKey = key;

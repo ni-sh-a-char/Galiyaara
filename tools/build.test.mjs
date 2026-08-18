@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { resolveMeta, slugify, titleize } from './build.mjs';
-import { PROVIDERS, normalizePhoto, parseJson, pickProvider, reconcileShow } from './curate.mjs';
+import { PROVIDERS, normalizePhoto, parseJson, pickProvider, pickProviders, reconcileShow } from './curate.mjs';
 
 const cases = [
   ['night flower.jpg', 'night-flower', 'Night Flower'],
@@ -145,4 +145,35 @@ console.log(`ok — ${cases.length} filename cases`);
   assert.throws(() => pickProvider({ GALIYAARA_AI_PROVIDER: 'nope' }), /unknown/);
   assert.throws(() => pickProvider({ GALIYAARA_AI_PROVIDER: 'groq' }), /GROQ_API_KEY is not set/);
   console.log('ok — 9 provider-selection cases');
+}
+
+// --- Falling back between free tiers ---------------------------------------
+// One free allowance will not cover a whole collection, so several keys chain.
+{
+  assert.deepEqual(pickProviders({}), [], 'no keys, no providers');
+
+  const both = pickProviders({ GROQ_API_KEY: 'a', OPENROUTER_API_KEY: 'b' });
+  assert.deepEqual(both.map((p) => p.label), ['Groq', 'OpenRouter'], 'tried in declared order');
+  assert.deepEqual(both.map((p) => p.key), ['a', 'b'], 'each carries its own key');
+
+  const all3 = pickProviders({ GROQ_API_KEY: 'a', OPENROUTER_API_KEY: 'b', OPENCODE_API_KEY: 'c' });
+  assert.equal(all3.length, 3);
+  assert.deepEqual(all3.filter((p) => p.vision).map((p) => p.label), ['Groq', 'OpenRouter'],
+    'only the ones that can see get the per-photograph pass');
+
+  // A model override belongs to the provider it was chosen for, not to a
+  // fallback running on a different service.
+  const over = pickProviders({ GROQ_API_KEY: 'a', OPENROUTER_API_KEY: 'b', GALIYAARA_AI_MODEL: 'mine' });
+  assert.equal(over[0].model, 'mine');
+  assert.equal(over[1].model, PROVIDERS.openrouter.model, 'fallback keeps its own default model');
+
+  // Naming a provider means that one only — no silent hop to another service.
+  const named = pickProviders({ GALIYAARA_AI_PROVIDER: 'openrouter', GROQ_API_KEY: 'a', OPENROUTER_API_KEY: 'b' });
+  assert.deepEqual(named.map((p) => p.label), ['OpenRouter']);
+
+  // pickProvider stays the "who goes first" answer.
+  assert.equal(pickProvider({ OPENROUTER_API_KEY: 'b' }).label, 'OpenRouter');
+  assert.equal(pickProvider({}), null);
+
+  console.log('ok — 9 provider-fallback cases');
 }
