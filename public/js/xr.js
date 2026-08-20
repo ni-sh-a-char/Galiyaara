@@ -231,7 +231,7 @@ export function setupXR(xr, hooks = {}) {
     camera.getWorldDirection(aim);
     at.copy(eye).addScaledVector(aim, FREE_DIST);
     // The ring's own normal is +Y, so point that back down the line of sight.
-    facing.setFromUnitVectors(UP, aim.clone().negate().normalize());
+    facing.setFromUnitVectors(UP, aim.negate());   // getWorldDirection is unit already
     ar.reticle.matrix.compose(at, facing, ONE);
     return false;
   }

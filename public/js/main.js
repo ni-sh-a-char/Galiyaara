@@ -287,10 +287,11 @@ async function wireXR(gallery, photos) {
     // Tell the visitor what the session can actually see. "Nothing is
     // happening" and "your wall is too plain for ARCore to lock onto" look
     // identical from the inside, and only one of them is a bug.
+    // No early return on a hidden hint: aim state settles within the first few
+    // frames, well before the print has downloaded and the hint is shown, so
+    // skipping those updates left it stuck on its initial text for the session.
     onAim(onSurface) {
-      const hint = $('#ar-hint');
-      if (hint.hidden) return;
-      hint.textContent = onSurface
+      $('#ar-hint').textContent = onSurface
         ? 'Surface found — tap to hang the print here.'
         : 'No surface yet (blank walls are hard to see). Tap to hang it in front of you.';
     },
