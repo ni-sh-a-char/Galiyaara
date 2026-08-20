@@ -238,6 +238,261 @@
     "sky"
    ],
    "mood": "still"
+  },
+  "assured": {
+   "stamp": "6b82bffc3804e458",
+   "title": "Midday Rest",
+   "caption": "Eyes closed against the light.",
+   "alt": "Close-up of an orange tabby cat sleeping on a purple fabric surface.",
+   "tags": [
+    "cat",
+    "orange",
+    "animal",
+    "sleep",
+    "daylight",
+    "fur",
+    "purple",
+    "street"
+   ],
+   "mood": "still"
+  },
+  "bird": {
+   "stamp": "04872e7bb6085f6e",
+   "title": "The Ledge",
+   "caption": "One foot is lifted from the stone.",
+   "alt": "Black and white photograph of a small bird perched on a dark, textured surface against a black background.",
+   "tags": [
+    "bird",
+    "animal",
+    "monochrome",
+    "darkness",
+    "stone",
+    "profile",
+    "stillness",
+    "india"
+   ],
+   "mood": "stark"
+  },
+  "chirtmas": {
+   "stamp": "fbcab1d5a0db0576",
+   "title": "Night Watch",
+   "caption": "Light hits the wing of a statue above a crowd.",
+   "alt": "A statue of an angel on a pedestal at night, illuminated by a bright street lamp with people in silhouette below.",
+   "tags": [
+    "statue",
+    "night",
+    "city",
+    "crowd",
+    "artificial light",
+    "silhouette",
+    "urban",
+    "india"
+   ],
+   "mood": "still"
+  },
+  "choices": {
+   "stamp": "d4347ddc646e0831",
+   "title": "Street Lamp",
+   "caption": "Light falls on a metal box and the dirt beneath a tree.",
+   "alt": "A night photograph of a single street lamp illuminating a tree, a metal utility box, and a patch of ground.",
+   "tags": [
+    "night",
+    "street lamp",
+    "tree",
+    "utility box",
+    "shadows",
+    "black and white",
+    "india",
+    "darkness"
+   ],
+   "mood": "still"
+  },
+  "civilization": {
+   "stamp": "f03b7323bb0e18f5",
+   "title": "The Floating Pyre",
+   "caption": "Four crows perch on a body drifting toward the shore.",
+   "alt": "A body wrapped in cloth floats in a river with birds on top, while people and a fire are visible on the distant bank.",
+   "tags": [
+    "banaras",
+    "river",
+    "birds",
+    "cremation",
+    "dusk",
+    "blue",
+    "india",
+    "water"
+   ],
+   "mood": "still"
+  },
+  "corona": {
+   "stamp": "5febd84cdb8cdc87",
+   "title": "The Swab",
+   "caption": "A gloved hand holds a thin white stick to a nostril.",
+   "alt": "A person in a face mask and gloves performs a nasal swab on a bearded man outdoors.",
+   "tags": [
+    "medical",
+    "testing",
+    "mask",
+    "gloves",
+    "daylight",
+    "outdoor",
+    "india",
+    "street"
+   ],
+   "mood": "sterile"
+  },
+  "courage": {
+   "stamp": "c2fb53bb3ef31629",
+   "title": "Iron And Leg",
+   "caption": "Hairs on the legs catch the light against rusted metal.",
+   "alt": "Close-up of a small brown spider on a dark, rusted iron bar.",
+   "tags": [
+    "spider",
+    "insect",
+    "metal",
+    "rust",
+    "macro",
+    "daylight",
+    "brown",
+    "texture"
+   ],
+   "mood": "still"
+  },
+  "difference": {
+   "stamp": "310eb1f7713a97d8",
+   "title": "Green In Grey",
+   "caption": "Green blades grow from a patch of grey soil.",
+   "alt": "Close-up of green grass on the left and grey, dried plants on the right, emerging from dark soil.",
+   "tags": [
+    "grass",
+    "soil",
+    "selective color",
+    "green",
+    "grey",
+    "nature",
+    "ground",
+    "contrast"
+   ],
+   "mood": "stark"
+  },
+  "fast": {
+   "stamp": "02287f93aac63082",
+   "title": "Night Transit",
+   "caption": "One headlight cuts through the blue dark.",
+   "alt": "A person on a scooter drives down a dark asphalt road at night under blue streetlights.",
+   "tags": [
+    "scooter",
+    "road",
+    "night",
+    "blue",
+    "streetlights",
+    "india",
+    "motion",
+    "urban"
+   ],
+   "mood": "solitary"
+  },
+  "header-banner": {
+   "stamp": "6963441d4da1e360",
+   "title": "The Tool",
+   "caption": "A camera hangs by the hand against a grey sky.",
+   "alt": "Black and white close-up of a person's side and hand holding a DSLR camera, framed by rocky terrain.",
+   "tags": [
+    "camera",
+    "lens",
+    "rocks",
+    "grey",
+    "daylight",
+    "monochrome",
+    "outdoors",
+    "clothing"
+   ],
+   "mood": "still"
+  },
+  "hope": {
+   "stamp": "17f0eb7039ba1a08",
+   "title": "Yellow Glass",
+   "caption": "Light filters through amber circles in a metal frame.",
+   "alt": "Close-up of a glowing yellow glass lamp with a black metal filigree frame against a dark background.",
+   "tags": [
+    "lamp",
+    "glass",
+    "yellow",
+    "night",
+    "interior",
+    "metal",
+    "glow",
+    "india"
+   ],
+   "mood": "still"
+  },
+  "ressurection": {
+   "stamp": "fab101dfcf65143d",
+   "title": "Night Asphalt",
+   "caption": "One white flower rests on the coarse grit of the road.",
+   "alt": "A small white flower with a yellow center on dark, textured asphalt at night with blurred car lights in the background.",
+   "tags": [
+    "flower",
+    "asphalt",
+    "night",
+    "street",
+    "white",
+    "bokeh",
+    "india",
+    "roadside"
+   ],
+   "mood": "still"
+  },
+  "riddick": {
+   "stamp": "45debe2f952b0f81",
+   "title": "The Cluster",
+   "caption": "Red millipedes huddle together on damp grey stone.",
+   "alt": "A dense mass of reddish-brown millipedes coiled together on a dark, textured rock surface.",
+   "tags": [
+    "millipedes",
+    "insects",
+    "nature",
+    "red",
+    "grey",
+    "stone",
+    "macro",
+    "wildlife"
+   ],
+   "mood": "still"
+  },
+  "unstoppable": {
+   "stamp": "4daf540b7b324f09",
+   "title": "The Sketch",
+   "caption": "A charcoal pencil marks the eye of a face on white paper.",
+   "alt": "Over-the-shoulder view of a person in a red shirt drawing a portrait on a sketchbook resting on stone steps.",
+   "tags": [
+    "drawing",
+    "portrait",
+    "street",
+    "daylight",
+    "charcoal",
+    "red",
+    "stone",
+    "india"
+   ],
+   "mood": "focused"
+  },
+  "wont-beleive": {
+   "stamp": "c061f2056df2beaa",
+   "title": "Green Horizon",
+   "caption": "The tree leaves overlap the edge of the blue sky.",
+   "alt": "A wide green field under a bright blue sky with white clouds, framed by green tree branches on the right.",
+   "tags": [
+    "field",
+    "sky",
+    "clouds",
+    "green",
+    "daylight",
+    "nature",
+    "horizon",
+    "india"
+   ],
+   "mood": "still"
   }
  },
  "hang": [],
