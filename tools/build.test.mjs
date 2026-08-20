@@ -3,7 +3,7 @@
  * decide the public URL of every photograph. Run with `npm test`.
  */
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolveMeta, slugify, titleize } from './build.mjs';
 import { PROVIDERS, normalizePhoto, parseJson, pickProvider, pickProviders, reconcileShow } from './curate.mjs';
 
@@ -221,7 +221,18 @@ console.log(`ok — ${cases.length} filename cases`);
 
   // Hit-testing must be an enhancement. Unhandled, its rejection also skipped
   // the 'select' listener below it — session alive, nothing placeable, ever.
-  assert.match(xr, /async function startAR\(\) \{\s*try \{/, 'startAR must not be able to reject');
+  assert.match(xr, /async function startAR\(s\) \{\s*try \{/, 'startAR must not be able to reject');
+
+  // The visitor can leave during any of the awaits in enter(). If 'end' fires
+  // before its listener exists, nothing is torn down, `session` stays set, and
+  // "See it on your wall" then works exactly once per page load.
+  assert.match(xr, /session = s;[\s\S]{0,120}s\.addEventListener\('end'/,
+    "the 'end' listener must be attached before anything is awaited");
+  assert.ok(xr.indexOf("s.addEventListener('end'") < xr.indexOf('await renderer.xr.setSession'),
+    "...and specifically before the first await");
+  assert.match(xr, /const live = \(\) => session === s;/, 'every await must be followed by a liveness check');
+  assert.match(xr, /placed\.traverse\(\(o\) => \{[\s\S]{0,200}map\?\.dispose\(\)/,
+    'each print is a full-resolution texture and must be released with its session');
   assert.match(xr, /if \(!found\) aimFree\(\);[\s\S]{0,400}ar\.reticle\.visible = true;/,
     'the reticle must show even with no surface — an invisible ring is why a live session looked dead');
   assert.doesNotMatch(xr, /ar\.reticle\.visible = false;\s*return;/, 'zero hits must not blank the reticle');
@@ -231,7 +242,7 @@ console.log(`ok — ${cases.length} filename cases`);
   assert.ok(html.includes('id="xr-note"'), 'there must be somewhere to explain a missing headset mode');
   assert.match(main, /if \(!vr && !ar\) \{[\s\S]{0,400}note\.hidden = false;/, 'unsupported must be stated, not silent');
 
-  console.log('ok — 17 headset smoke checks');
+  console.log('ok — 21 headset smoke checks');
 }
 
 // --- Where a print actually lands ------------------------------------------
@@ -289,4 +300,54 @@ console.log(`ok — ${cases.length} filename cases`);
   }
 
   console.log('ok — 12 print-placement cases');
+}
+
+// --- Every photograph, not just the first one -------------------------------
+// "See it on your wall" is generic over the manifest: it loads photo.large and
+// sizes the print from photo.w / photo.h. So the guarantee that it works for a
+// photograph added next year is exactly the guarantee that the manifest entry
+// the build writes for it is complete. Checked against the real dist/ when one
+// has been built; skipped rather than failed when it has not.
+{
+  const manifest = new URL('../dist/photos.json', import.meta.url);
+  if (!existsSync(manifest)) {
+    console.log('skip — no dist/ built, manifest contract not checked');
+  } else {
+    const { photos } = JSON.parse(readFileSync(manifest, 'utf8'));
+    assert.ok(photos.length, 'a built manifest must not be empty');
+
+    const seen = new Set();
+    for (const p of photos) {
+      const where = p.slug || JSON.stringify(p);
+
+      assert.match(p.slug || '', /^[a-z0-9][a-z0-9-]*$/, `${where}: slug is a URL`);
+      assert.ok(!seen.has(p.slug), `${where}: slugs must be unique or the files collide`);
+      seen.add(p.slug);
+
+      // The corridor hangs the thumb; AR hangs the large. Both must be there.
+      for (const key of ['thumb', 'large']) {
+        const file = new URL(`../dist/${p[key]}`, import.meta.url);
+        assert.ok(existsSync(file), `${where}: ${key} is referenced but not built`);
+      }
+
+      // A print with no dimensions sizes to NaN, and a NaN PlaneGeometry
+      // renders nothing at all — one silently broken frame on the wall.
+      for (const key of ['w', 'h']) {
+        assert.equal(typeof p[key], 'number', `${where}: ${key} must be a number`);
+        assert.ok(Number.isFinite(p[key]) && p[key] > 0, `${where}: ${key} must be positive`);
+      }
+
+      const aspect = p.w / p.h;
+      const pw = aspect >= 1 ? 0.6 : 0.6 * aspect;
+      const ph = aspect >= 1 ? 0.6 / aspect : 0.6;
+      assert.ok(Number.isFinite(pw) && pw > 0, `${where}: print width is unusable`);
+      assert.ok(Number.isFinite(ph) && ph > 0, `${where}: print height is unusable`);
+      assert.ok(Math.abs(Math.max(pw, ph) - 0.6) < 1e-9, `${where}: long edge is not 60cm`);
+
+      // Every frame needs a name and a description, curated or not.
+      assert.ok(p.title && p.title.trim(), `${where}: needs a title`);
+      assert.ok(p.alt && p.alt.trim(), `${where}: needs alt text`);
+    }
+    console.log(`ok — ${photos.length} photographs all hangable on a wall`);
+  }
 }

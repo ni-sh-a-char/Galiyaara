@@ -207,10 +207,12 @@ export function setupXR(xr, hooks = {}) {
   // end up with no reticle and no way to hang anything, which is what happened
   // when this rejection went unhandled inside an async caller: the 'select'
   // listener below it was never attached either.
-  async function startAR() {
+  async function startAR(s) {
     try {
-      const viewer = await session.requestReferenceSpace('viewer');
-      hitTestSource = await session.requestHitTestSource({ space: viewer });
+      const viewer = await s.requestReferenceSpace('viewer');
+      const source = await s.requestHitTestSource({ space: viewer });
+      if (session !== s) { source?.cancel?.(); return; }   // they already left
+      hitTestSource = source;
     } catch (err) {
       console.warn('no hit-testing in this session — free placement only', err);
       hitTestSource = null;
@@ -307,6 +309,39 @@ export function setupXR(xr, hooks = {}) {
   // the origin (see below) and give it back when the session ends.
   const rigWas = { pos: new THREE.Vector3(), rot: 0 };
 
+  /**
+   * Tear a session down. Attached to 'end' BEFORE anything is awaited, because
+   * a visitor can leave AR at any moment — including during the seconds a 2 MP
+   * print spends downloading. Registered after those awaits (as it was), the
+   * 'end' event fires into a void: `session` stays set, so `if (session)
+   * return` below rejects every later attempt and the whole feature works
+   * exactly once per page load, for whichever photograph was tried first.
+   */
+  function teardown(isAR) {
+    session = null;
+    mode = null;
+    hitTestSource?.cancel?.();
+    hitTestSource = null;
+    if (placed) {
+      ar.scene.remove(placed);
+      // Each print is its own full-resolution texture; without this every
+      // "see it on your wall" leaks one for the life of the page.
+      placed.traverse((o) => {
+        o.geometry?.dispose();
+        o.material?.map?.dispose();
+        o.material?.dispose();
+      });
+      placed = null;
+    }
+    pendingPrint = null;
+    wantsPlace = false;
+    onSurface = false;
+    if (isAR) { rig.position.copy(rigWas.pos); rig.rotation.y = rigWas.rot; }
+    ar.reticle.visible = false;
+    xr.setScene(null);
+    hooks.onSession?.(null);
+  }
+
   async function enter(which, print) {
     if (session) return;
     const isAR = which === 'ar';
@@ -314,8 +349,10 @@ export function setupXR(xr, hooks = {}) {
       if (!print) return;
       pendingPrint = print;
     }
+
+    let s;
     try {
-      session = await navigator.xr.requestSession(isAR ? 'immersive-ar' : 'immersive-vr', {
+      s = await navigator.xr.requestSession(isAR ? 'immersive-ar' : 'immersive-vr', {
         optionalFeatures: isAR
           ? ['dom-overlay', 'light-estimation']
           : ['local-floor', 'bounded-floor', 'hand-tracking'],
@@ -329,7 +366,13 @@ export function setupXR(xr, hooks = {}) {
       return;
     }
 
+    session = s;
     mode = isAR ? 'ar' : 'vr';
+    s.addEventListener('end', () => teardown(isAR));
+
+    // Every await below can outlive the session, so each one is followed by a
+    // check that the session we are still setting up is the current one.
+    const live = () => session === s;
 
     if (isAR) {
       // The camera is a child of the rig, so three multiplies every headset
@@ -348,40 +391,28 @@ export function setupXR(xr, hooks = {}) {
     }
 
     renderer.xr.setReferenceSpaceType(isAR ? 'local' : 'local-floor');
-    await renderer.xr.setSession(session);
+    await renderer.xr.setSession(s);
+    if (!live()) return;
+
+    hooks.onSession?.(mode);   // get the page chrome out of the way immediately
 
     if (isAR) {
-      await startAR();   // never rejects; hit-test is optional
+      await startAR(s);        // never rejects; hit-test is optional
+      if (!live()) return;
+      s.addEventListener('select', placePrint);
       // The texture is still in flight — requesting the session first is what
-      // keeps the user's tap "recent" enough for the browser to allow it. A
-      // print that never arrives leaves the reticle working and nothing to
-      // hang, which beats dropping the visitor out of AR entirely.
-      session.addEventListener('select', placePrint);
+      // keeps the visitor's tap "recent" enough for the browser to allow it.
       try {
-        pendingPrint.texture = await pendingPrint.texture;
-        if (wantsPlace) placePrint();          // they tapped while it downloaded
+        const texture = await pendingPrint.texture;
+        if (!live()) { texture?.dispose?.(); return; }
+        pendingPrint.texture = texture;
+        if (wantsPlace) placePrint();        // they tapped while it downloaded
       } catch (err) {
         console.warn('the print did not load', err);
         pendingPrint = null;
-        hooks.onSession?.('ar', err);
+        if (live()) hooks.onSession?.('ar', err);
       }
     }
-
-    session.addEventListener('end', () => {
-      session = null;
-      mode = null;
-      hitTestSource?.cancel?.();
-      hitTestSource = null;
-      if (placed) { ar.scene.remove(placed); placed = null; }
-      wantsPlace = false;
-      onSurface = false;
-      if (isAR) { rig.position.copy(rigWas.pos); rig.rotation.y = rigWas.rot; }
-      ar.reticle.visible = false;
-      xr.setScene(null);
-      hooks.onSession?.(null);
-    });
-
-    hooks.onSession?.(mode);
   }
 
   return {

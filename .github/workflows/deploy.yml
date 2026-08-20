@@ -70,6 +70,12 @@ jobs:
 
       - run: npm run build
 
+      # After the build, so the manifest contract is checked against the real
+      # dist/: every photograph must have both derivatives and usable
+      # dimensions, or "see it on your wall" renders a NaN-sized frame — that
+      # is, nothing — for that one photograph and no one finds out.
+      - run: npm test
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
