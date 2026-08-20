@@ -1,6 +1,245 @@
 {
  "version": 1,
- "photos": {},
+ "photos": {
+  "capture": {
+   "stamp": "7552e9b36ab50938",
+   "title": "The Last Cup",
+   "caption": "Light hits a paper cup on a wooden table.",
+   "alt": "Black and white photo of a single paper cup on a grained wooden table in a dark room with a sliver of light from above.",
+   "tags": [
+    "paper cup",
+    "wooden table",
+    "black and white",
+    "indoor",
+    "shadow",
+    "night",
+    "still life",
+    "india"
+   ],
+   "mood": "stark"
+  },
+  "chitta": {
+   "stamp": "44b37b218f35f936",
+   "title": "The Red Cap",
+   "caption": "A man in a red beanie leans over a metal tray on a stone ledge.",
+   "alt": "A person wearing a red cap and brown jacket bends over a small tray of food on a stone block next to a grey car.",
+   "tags": [
+    "street",
+    "city",
+    "daylight",
+    "grey",
+    "red",
+    "food",
+    "concrete",
+    "india"
+   ],
+   "mood": "still"
+  },
+  "courage-3": {
+   "stamp": "380837c8b776d9ed",
+   "title": "Grain And Void",
+   "caption": "Split wood holds a deep, vertical fissure.",
+   "alt": "Black and white close-up of a weathered, textured piece of wood diagonally crossing a black background.",
+   "tags": [
+    "wood",
+    "texture",
+    "black and white",
+    "macro",
+    "grain",
+    "darkness",
+    "contrast",
+    "still life"
+   ],
+   "mood": "stark"
+  },
+  "fate": {
+   "stamp": "0a4607020d046629",
+   "title": "River At Dusk",
+   "caption": "Glasses reflect the orange light of the horizon.",
+   "alt": "Side profile of a person wearing glasses looking at a river under a dark orange sunset sky.",
+   "tags": [
+    "river",
+    "sunset",
+    "glasses",
+    "dusk",
+    "water",
+    "india",
+    "silhouette",
+    "orange"
+   ],
+   "mood": "still"
+  },
+  "flowers": {
+   "stamp": "b26ca0827fa10244",
+   "title": "Transit Hall",
+   "caption": "Magenta petals against a polished stone floor.",
+   "alt": "Four bright pink artificial flowers in a pot in the foreground of a long, empty tiled corridor.",
+   "tags": [
+    "flowers",
+    "corridor",
+    "magenta",
+    "indoor",
+    "stone",
+    "architecture",
+    "empty",
+    "still life"
+   ],
+   "mood": "still"
+  },
+  "globe": {
+   "stamp": "a012a7761376caad",
+   "title": "Glass Sphere",
+   "caption": "Light bends through a pitted glass ball on a wooden surface.",
+   "alt": "A small, textured glass sphere resting on a ribbed wooden surface, lit from behind against a black background.",
+   "tags": [
+    "glass",
+    "sphere",
+    "wood",
+    "night",
+    "amber",
+    "light",
+    "texture",
+    "still life"
+   ],
+   "mood": "quiet"
+  },
+  "howler": {
+   "stamp": "04b0968621b8624a",
+   "title": "Night Watch",
+   "caption": "The dog sits against a pale wall in the dark.",
+   "alt": "Silhouette of a dog sitting on a dark pavement at night, facing a white wall and a distant street lamp.",
+   "tags": [
+    "dog",
+    "night",
+    "silhouette",
+    "street",
+    "india",
+    "darkness",
+    "concrete",
+    "shadow"
+   ],
+   "mood": "still"
+  },
+  "induction": {
+   "stamp": "a4f36599dff83c42",
+   "title": "Glass And Flame",
+   "caption": "Light bends through two glass spheres on a wooden surface.",
+   "alt": "Two glass spheres resting on a light-colored wood grain surface against a black background, one containing a bright orange flame.",
+   "tags": [
+    "glass",
+    "fire",
+    "wood",
+    "night",
+    "orange",
+    "light",
+    "spheres",
+    "still life"
+   ],
+   "mood": "warm"
+  },
+  "journey": {
+   "stamp": "5ab368b25bd0c38c",
+   "title": "Rear View",
+   "caption": "Three men sit in the back of a white pickup truck on a narrow road.",
+   "alt": "The back of a white pickup truck carrying three men and cargo, driving away on a paved road lined with green trees under a blue sky.",
+   "tags": [
+    "truck",
+    "men",
+    "road",
+    "daylight",
+    "greenery",
+    "transport",
+    "rural",
+    "india"
+   ],
+   "mood": "still"
+  },
+  "its": {
+   "stamp": "1e7e1e2c32b66bcb",
+   "title": "The Workshop Row",
+   "caption": "A pink price tag hangs from the hand of a goddess.",
+   "alt": "A line of painted deity statues under a bamboo roof with a numbered price tag in the foreground.",
+   "tags": [
+    "statues",
+    "workshop",
+    "india",
+    "bamboo",
+    "pink",
+    "religion",
+    "indoor",
+    "market"
+   ],
+   "mood": "still"
+  },
+  "laughter": {
+   "stamp": "09a0ead124f82530",
+   "title": "Discarded Form",
+   "caption": "Paint peels from a smiling face in the dirt.",
+   "alt": "A broken doll head and arm lie amidst dark soil, dry leaves, and debris.",
+   "tags": [
+    "doll",
+    "debris",
+    "dirt",
+    "plastic",
+    "waste",
+    "overhead",
+    "shadows",
+    "india"
+   ],
+   "mood": "stark"
+  },
+  "reminder": {
+   "stamp": "92340b75602b22bf",
+   "title": "Stone And Banyan",
+   "caption": "Green cloth hangs behind a seated stone figure.",
+   "alt": "A stone statue of a seated Buddha on a pedestal, positioned against a green fabric backdrop with banyan roots hanging above.",
+   "tags": [
+    "statue",
+    "buddha",
+    "banyan tree",
+    "green",
+    "stone",
+    "night",
+    "india",
+    "outdoor"
+   ],
+   "mood": "still"
+  },
+  "snoop-dogg": {
+   "stamp": "542708314eefca2f",
+   "title": "The Watchman",
+   "caption": "A red and white collar sits loose on the neck.",
+   "alt": "Close-up of a brown and white beagle dog wearing a red and blue collar, standing in a concrete yard before a corrugated metal shed.",
+   "tags": [
+    "dog",
+    "beagle",
+    "courtyard",
+    "daylight",
+    "india",
+    "red",
+    "brown",
+    "concrete"
+   ],
+   "mood": "still"
+  },
+  "view": {
+   "stamp": "d54842983f515e3b",
+   "title": "Railway Yard",
+   "caption": "Rust red and blue cars sit on parallel tracks.",
+   "alt": "High angle view of a train yard with red freight cars and blue passenger coaches under a bright blue sky with one large cloud.",
+   "tags": [
+    "trains",
+    "railway",
+    "india",
+    "daylight",
+    "blue",
+    "industrial",
+    "transport",
+    "sky"
+   ],
+   "mood": "still"
+  }
+ },
  "hang": [],
  "walks": [],
  "hangKey": null
