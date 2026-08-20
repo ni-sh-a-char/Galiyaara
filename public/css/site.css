@@ -670,3 +670,6 @@ body[data-xr="ar"] { background: transparent; }
 #ar-hint[hidden] { display: none; }
 
 #enter-ar { justify-self: start; }
+
+/* Only ever visible when a headset mode is missing or a session failed. */
+.xr-note { max-width: 46ch; margin-top: 0.9rem; color: var(--muted); }

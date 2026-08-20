@@ -98,6 +98,9 @@
         <button class="btn btn--primary btn--lg" data-enter>Enter the corridor</button>
         <button id="enter-vr" class="btn btn--lg" hidden>Enter in VR</button>
       </div>
+      <!-- Filled in only when a headset mode is unavailable or a session fails.
+           A button that silently never appears reads as a broken feature. -->
+      <p id="xr-note" class="sec-note xr-note" hidden></p>
       <div id="walks-wrap" hidden>
         <p class="label label--mid">Or take a curated walk</p>
         <ul id="walks" class="walks"></ul>
@@ -199,7 +202,7 @@
 
 <!-- Outside #hud on purpose: the HUD is hidden inside an AR session, and this
      is the one thing that has to be readable there. -->
-<div id="ar-hint" hidden>Point at a wall, then tap to hang the print &mdash; 60&nbsp;cm on the long edge.</div>
+<div id="ar-hint" hidden>Point at your wall and tap to hang the print &mdash; 60&nbsp;cm on the long edge. Blank walls are hard to detect; tapping hangs it either way.</div>
 
 <script type="module" src="js/main.js"></script>
 </body>

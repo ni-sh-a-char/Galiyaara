@@ -21,6 +21,7 @@ const PRINT_LONG_EDGE = 0.6;   // metres — a 60cm print, the size people buy
 const SNAP = Math.PI / 6;      // 30° snap turn; smooth turning is what makes people ill
 const WALK_SPEED = 1.6;        // m/s, roughly a gallery amble
 const DEADZONE = 0.18;
+const FREE_DIST = 1.4;         // metres out front when no wall could be detected
 
 /** Feature detection, cheap and safe on browsers with no navigator.xr at all. */
 export async function xrSupport() {
@@ -145,6 +146,31 @@ function buildPrint(texture, w, h) {
   return group;
 }
 
+/**
+ * Put a print where the visitor asked for it: on the detected surface if there
+ * was one, otherwise FREE_DIST down their line of sight. Upright and facing
+ * them either way — hit-test poses lie flat along the surface, which is not how
+ * anyone hangs a photograph.
+ *
+ * Exported because this is the entire answer to "did anything land on my wall",
+ * and it is the one part of AR that can be checked without a headset.
+ */
+export function aimPrint(print, eye, dir, surface = null) {
+  if (surface) print.position.setFromMatrixPosition(surface);
+  else print.position.copy(eye).addScaledVector(dir, FREE_DIST);
+
+  print.quaternion.identity();
+  // YXZ, not the default XYZ: in XYZ the yaw term is entangled with the pitch,
+  // so dropping the pitch of a print hung above or below eye level leaves it
+  // aimed several degrees off the viewer. In YXZ, y IS the bearing.
+  print.rotation.order = 'YXZ';
+  print.lookAt(eye);
+  print.rotation.x = 0;          // stand it up; a print is not a floor tile
+  print.rotation.z = 0;
+  print.translateZ(0.02);        // off the plaster, or the wall z-fights the frame
+  return print;
+}
+
 // --- Wiring -----------------------------------------------------------------
 
 /**
@@ -174,6 +200,7 @@ export function setupXR(xr, hooks = {}) {
   let hitTestSource = null;
   let placed = null;
   let pendingPrint = null;   // { texture, aspect } — texture may still be loading
+  let wantsPlace = false;    // tapped before the print finished downloading
 
   async function startAR() {
     const viewer = await session.requestReferenceSpace('viewer');
@@ -191,8 +218,27 @@ export function setupXR(xr, hooks = {}) {
   }
 
   // In AR, a tap places (or re-places) the print where the reticle is.
+  //
+  // A tap ALWAYS hangs something. The two ways this used to end in a blank
+  // room are both handled here rather than ignored:
+  //
+  //   no surface — ARCore finds a plane by its texture, and the blank painted
+  //                wall someone actually wants a print on is the hardest thing
+  //                in the room for it to see. Waiting for a hit that never
+  //                comes is not a feature. Fall back to hanging it where the
+  //                visitor is looking, at arm's length.
+  //
+  //   no texture — the print is a 2 MP download and the tap can easily beat
+  //                it. Latch the intent and hang it the moment it lands,
+  //                rather than swallowing the tap.
+  const eye = new THREE.Vector3();
+  const aim = new THREE.Vector3();
+
   function placePrint() {
-    if (mode !== 'ar' || !ar.reticle.visible || !pendingPrint?.texture) return;
+    if (mode !== 'ar') return;
+    if (!pendingPrint?.texture) { wantsPlace = true; return; }
+    wantsPlace = false;
+
     if (!placed) {
       const { texture, aspect } = pendingPrint;
       const w = aspect >= 1 ? PRINT_LONG_EDGE : PRINT_LONG_EDGE * aspect;
@@ -200,14 +246,10 @@ export function setupXR(xr, hooks = {}) {
       placed = buildPrint(texture, w, h);
       ar.scene.add(placed);
     }
-    placed.position.setFromMatrixPosition(ar.reticle.matrix);
-    // Stand the print up and turn it to face the viewer — hit-test poses lie
-    // flat along the surface, which is not how anyone hangs a photograph.
-    placed.quaternion.identity();
-    placed.lookAt(camera.getWorldPosition(new THREE.Vector3()));
-    placed.rotation.x = 0;
-    placed.rotation.z = 0;
-    placed.translateZ(0.02);   // off the plaster, or the wall z-fights the frame
+
+    camera.getWorldPosition(eye);
+    camera.getWorldDirection(aim);
+    aimPrint(placed, eye, aim, ar.reticle.visible ? ar.reticle.matrix : null);
     hooks.onPlaced?.();
   }
 
@@ -275,9 +317,11 @@ export function setupXR(xr, hooks = {}) {
       session.addEventListener('select', placePrint);
       try {
         pendingPrint.texture = await pendingPrint.texture;
+        if (wantsPlace) placePrint();          // they tapped while it downloaded
       } catch (err) {
         console.warn('the print did not load', err);
         pendingPrint = null;
+        hooks.onSession?.('ar', err);
       }
     }
 
@@ -287,6 +331,7 @@ export function setupXR(xr, hooks = {}) {
       hitTestSource?.cancel?.();
       hitTestSource = null;
       if (placed) { ar.scene.remove(placed); placed = null; }
+      wantsPlace = false;
       if (isAR) { rig.position.copy(rigWas.pos); rig.rotation.y = rigWas.rot; }
       ar.reticle.visible = false;
       xr.setScene(null);

@@ -252,13 +252,36 @@ function wire(gallery) {
 // the mode is supported, so a phone, a laptop and a Quest all load the same
 // page and only the Quest sees the extra doors.
 async function wireXR(gallery, photos) {
+  const note = $('#xr-note');
   const { vr, ar } = await xrSupport();
-  if (!vr && !ar) return;
+
+  // Silence is why "it doesn't work" is the only report anyone can make. A
+  // laptop, an iPhone and an Android without ARCore all just quietly grow no
+  // buttons, which is indistinguishable from a broken feature. Say which it is.
+  if (!vr && !ar) {
+    note.textContent = navigator.xr
+      ? 'This browser has WebXR but offers neither headset mode — AR needs an Android phone with Google Play Services for AR, VR needs a headset.'
+      : 'Walking this in a headset or hanging a print on your own wall needs WebXR: Chrome on an ARCore Android phone, or a Quest. Safari and desktop browsers cannot do it yet.';
+    note.hidden = false;
+    return;
+  }
 
   const xr = setupXR(gallery.xr, {
-    onSession(mode) {
+    onSession(mode, err) {
+      // mode is null when the session never opened, and still 'ar' when the
+      // session is live but the print failed to download. Those need different
+      // treatment: the second must not tear the page chrome back over a
+      // running session, and its message has to land somewhere visible from
+      // inside AR, which #xr-note is not.
       document.body.dataset.xr = mode || '';
-      $('#ar-hint').hidden = mode !== 'ar';
+      const hint = $('#ar-hint');
+      hint.hidden = mode !== 'ar';
+      if (err && mode === 'ar') {
+        hint.textContent = 'That print could not be downloaded. Leave AR and pick the frame again.';
+      } else if (err) {
+        note.textContent = `The headset session could not start: ${err.message || err}`;
+        note.hidden = false;
+      }
       if (mode === 'vr') gallery.setMode('roam');
     },
     onPlaced() { $('#ar-hint').hidden = true; },

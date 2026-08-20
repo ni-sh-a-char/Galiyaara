@@ -213,5 +213,73 @@ console.log(`ok — ${cases.length} filename cases`);
   assert.match(gallery, /if \(xrMove\?\.\(dt, frame\)\) dock\.active = false;/, 'VR locomotion must cancel a dock glide');
   assert.match(gallery, /dock\.active && renderScene === scene/, 'VR must glide to a docked frame, and AR must never dock');
 
-  console.log('ok — 8 headset smoke checks');
+  // A tap must hang a print whether or not a plane was ever detected, and
+  // whether or not the 2 MP texture beat the tap.
+  assert.match(xr, /if \(!pendingPrint\?\.texture\) \{ wantsPlace = true; return; \}/, 'an early tap must be latched, not swallowed');
+  assert.match(xr, /if \(wantsPlace\) placePrint\(\)/, 'and honoured once the print lands');
+  assert.match(xr, /ar\.reticle\.visible \? ar\.reticle\.matrix : null/, 'no detected wall must still place the print');
+  assert.match(xr, /print\.rotation\.order = 'YXZ'/, 'YXZ or prints off eye level hang crooked');
+
+  // Neither headset mode available must say so rather than grow no buttons.
+  assert.ok(html.includes('id="xr-note"'), 'there must be somewhere to explain a missing headset mode');
+  assert.match(main, /if \(!vr && !ar\) \{[\s\S]{0,400}note\.hidden = false;/, 'unsupported must be stated, not silent');
+
+  console.log('ok — 14 headset smoke checks');
+}
+
+// --- Where a print actually lands ------------------------------------------
+// The one piece of AR geometry that can be exercised without a headset, and
+// the one that decides whether the visitor sees anything at all. three is a
+// devDependency and its math classes need no DOM, so this is a real test
+// rather than a grep.
+{
+  const THREE = await import('../public/vendor/three.module.min.js');
+  const { aimPrint } = await import('../public/js/xr.js');
+
+  const face = (o) => new THREE.Vector3(0, 0, 1).applyQuaternion(o.quaternion);
+  const eye = new THREE.Vector3(0, 1.5, 0);
+
+  // 1. A wall was detected: the print goes on the wall, not through it.
+  {
+    const wall = new THREE.Matrix4().setPosition(0, 1.5, -2);
+    const p = aimPrint(new THREE.Group(), eye, new THREE.Vector3(0, 0, -1), wall);
+    assert.ok(p.position.distanceTo(new THREE.Vector3(0, 1.5, -2)) < 0.03,
+      'lands on the detected surface');
+    assert.ok(p.position.z > -2, 'nudged off the wall toward the room, not into it');
+  }
+
+  // 2. No wall detected — ARCore cannot see blank plaster, and this is the
+  //    case that used to leave the visitor staring at an empty room forever.
+  //    The print must still hang, down the line of sight.
+  {
+    const dir = new THREE.Vector3(0, 0, -1);
+    const p = aimPrint(new THREE.Group(), eye, dir, null);
+    assert.ok(p.position.z < -1, 'hung out in front of the viewer, not at their feet');
+    assert.ok(p.position.distanceTo(eye) > 1, 'far enough away to look at');
+    assert.ok(p.position.distanceTo(eye) < 2, 'and not across the street');
+  }
+
+  // 3. Upright and facing the viewer, from any angle. A print tipped flat like
+  //    the hit-test pose it came from is invisible edge-on.
+  for (const [x, z] of [[0, -2], [2, 0], [-1.5, 1.5], [0, 3]]) {
+    const where = new THREE.Vector3(x, 1.2, z);
+    const p = aimPrint(new THREE.Group(), eye, new THREE.Vector3(), new THREE.Matrix4().setPosition(where));
+    assert.equal(Math.abs(p.rotation.x) < 1e-9, true, `upright at ${x},${z}`);
+    assert.equal(Math.abs(p.rotation.z) < 1e-9, true, `not tilted at ${x},${z}`);
+
+    const toEye = eye.clone().sub(p.position).setY(0).normalize();
+    const n = face(p).setY(0).normalize();
+    assert.ok(n.dot(toEye) > 0.99, `faces the viewer at ${x},${z} (dot ${n.dot(toEye).toFixed(3)})`);
+  }
+
+  // 4. Portrait and landscape both keep their long edge at the print size.
+  const long = 0.6;
+  for (const aspect of [1.5, 1 / 1.5, 1]) {
+    const w = aspect >= 1 ? long : long * aspect;
+    const h = aspect >= 1 ? long / aspect : long;
+    assert.ok(Math.abs(Math.max(w, h) - long) < 1e-9, `long edge is ${long}m at aspect ${aspect}`);
+    assert.ok(Math.abs(w / h - aspect) < 1e-9, `aspect preserved at ${aspect}`);
+  }
+
+  console.log('ok — 12 print-placement cases');
 }
