@@ -177,7 +177,11 @@ export function createGallery(canvas, photos, hooks = {}) {
     || navigator.hardwareConcurrency <= 4;
   const LENGTH = START + photos.length * SEG + 30;
 
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: !lowPower, powerPreference: 'high-performance' });
+  // alpha:true is not cosmetic — three derives its clear alpha from it, and a
+  // clear alpha of 1 paints the AR framebuffer opaque, burying the passthrough
+  // camera under a black rectangle. The corridor is unaffected: the sky sphere
+  // covers the frustum, so nothing shows through on the flat page.
+  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: !lowPower, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(devicePixelRatio, lowPower ? 1.5 : 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.25;
@@ -644,7 +648,18 @@ export function createGallery(canvas, photos, hooks = {}) {
     if (!inXR) resize();
 
     if (inXR) {
-      xrMove?.(dt, frame);
+      // Thumbstick wins over a dock — pushing off cancels the glide.
+      if (xrMove?.(dt, frame)) dock.active = false;
+      // Aiming the trigger at a frame in VR has to actually walk you up to it;
+      // outside XR the dock branch below does that, and in XR nothing did.
+      // AR never docks: over passthrough the corridor is not there to walk.
+      else if (dock.active && renderScene === scene) {
+        rig.position.lerp(dock.pos, reduced ? 1 : ease(dt, 5.5));
+        rig.position.y = 0;                       // in a headset the floor is the floor
+        if (Math.hypot(rig.position.x - dock.pos.x, rig.position.z - dock.pos.z) < 0.08) {
+          dock.active = false;
+        }
+      }
     } else if (dock.active) {
       const k = reduced ? 1 : ease(dt, 5.5);
       rig.position.lerp(dock.pos, k);

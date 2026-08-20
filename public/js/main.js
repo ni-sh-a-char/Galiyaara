@@ -279,20 +279,17 @@ async function wireXR(gallery, photos) {
       btn.dataset.index = String(e.detail.index);
     });
 
-    btn.addEventListener('click', async () => {
+    // The session is requested in the same tick as the tap. Awaiting the print
+    // first spends the browser's user-activation window on a 2 MP download and
+    // the session request is refused — so the texture is handed over as a
+    // promise and the XR layer picks it up once it lands.
+    btn.addEventListener('click', () => {
       const photo = photos[Number(btn.dataset.index)];
       if (!photo) return;
-      btn.disabled = true;
-      btn.textContent = 'Loading the print…';
-      try {
-        const texture = await gallery.loadTexture(photo.large);
-        await xr.enterAR({ texture, aspect: photo.w / photo.h });
-      } catch (err) {
-        console.warn('could not start AR', err);
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'See it on your wall';
-      }
+      xr.enterAR({
+        texture: gallery.loadTexture(photo.large),
+        aspect: photo.w / photo.h,
+      });
     });
   }
 }

@@ -64,9 +64,12 @@ function makeMover({ renderer, camera, rig, corridor }) {
   const head = new THREE.Quaternion();
   let turnLatched = false;
 
+  // Returns true on the frames it actually walked you somewhere, so the caller
+  // knows to drop whatever it was gliding you toward.
   return (dt) => {
+    let moved = false;
     const session = renderer.xr.getSession();
-    if (!session) return;
+    if (!session) return moved;
 
     let mx = 0, my = 0, turn = 0;
     for (const src of session.inputSources) {
@@ -83,7 +86,7 @@ function makeMover({ renderer, camera, rig, corridor }) {
     if (turn && !turnLatched) { rig.rotation.y -= Math.sign(turn) * SNAP; turnLatched = true; }
     if (!turn) turnLatched = false;
 
-    if (!mx && !my) return;
+    if (!mx && !my) return moved;
 
     camera.getWorldQuaternion(head);
     forward.set(0, 0, -1).applyQuaternion(head);
@@ -96,11 +99,13 @@ function makeMover({ renderer, camera, rig, corridor }) {
     const step = WALK_SPEED * dt;
     rig.position.addScaledVector(forward, -my * step);
     rig.position.addScaledVector(right, mx * step);
+    moved = true;
 
     // Same walls as the flat-screen walk — you cannot stroll through plaster.
     const { HALF_W, LENGTH } = corridor;
     rig.position.x = Math.min(HALF_W - 0.5, Math.max(-HALF_W + 0.5, rig.position.x));
     rig.position.z = Math.min(10, Math.max(-(LENGTH - 24), rig.position.z));
+    return moved;
   };
 }
 
@@ -168,9 +173,9 @@ export function setupXR(xr, hooks = {}) {
   const ar = buildArScene();
   let hitTestSource = null;
   let placed = null;
-  let pendingPrint = null;   // { url, aspect } chosen before the session opened
+  let pendingPrint = null;   // { texture, aspect } — texture may still be loading
 
-  async function startAR(frame) {
+  async function startAR() {
     const viewer = await session.requestReferenceSpace('viewer');
     hitTestSource = await session.requestHitTestSource({ space: viewer });
   }
@@ -187,7 +192,7 @@ export function setupXR(xr, hooks = {}) {
 
   // In AR, a tap places (or re-places) the print where the reticle is.
   function placePrint() {
-    if (mode !== 'ar' || !ar.reticle.visible || !pendingPrint) return;
+    if (mode !== 'ar' || !ar.reticle.visible || !pendingPrint?.texture) return;
     if (!placed) {
       const { texture, aspect } = pendingPrint;
       const w = aspect >= 1 ? PRINT_LONG_EDGE : PRINT_LONG_EDGE * aspect;
@@ -202,13 +207,21 @@ export function setupXR(xr, hooks = {}) {
     placed.lookAt(camera.getWorldPosition(new THREE.Vector3()));
     placed.rotation.x = 0;
     placed.rotation.z = 0;
+    placed.translateZ(0.02);   // off the plaster, or the wall z-fights the frame
     hooks.onPlaced?.();
   }
 
+  // Returns true only when VR locomotion actually moved the rig — the corridor
+  // uses that to drop a dock glide the moment the visitor walks off on their own.
   xr.setMover((dt, frame) => {
-    if (mode === 'vr') move(dt);
-    else if (mode === 'ar') arFrame(frame);
+    if (mode === 'vr') return move(dt);
+    if (mode === 'ar') arFrame(frame);
+    return false;
   });
+
+  // Where the corridor left the walker standing. AR has to borrow the rig at
+  // the origin (see below) and give it back when the session ends.
+  const rigWas = { pos: new THREE.Vector3(), rot: 0 };
 
   async function enter(which, print) {
     if (session) return;
@@ -233,20 +246,48 @@ export function setupXR(xr, hooks = {}) {
     }
 
     mode = isAR ? 'ar' : 'vr';
+
+    if (isAR) {
+      // The camera is a child of the rig, so three multiplies every headset
+      // pose by wherever the rig is standing in the corridor. Harmless in VR —
+      // the rig IS the walker — but in AR the hit-test poses and the print live
+      // in raw reference space, so a rig parked 40m down the arcade puts the
+      // whole room 40m behind you and the wall you are pointing at gets
+      // nothing. Park the rig at the origin for the duration.
+      rigWas.pos.copy(rig.position);
+      rigWas.rot = rig.rotation.y;
+      rig.position.set(0, 0, 0);
+      rig.rotation.y = 0;
+      // Swap the scene before the session opens, so not one frame of corridor
+      // is drawn over the passthrough.
+      xr.setScene(ar.scene);
+    }
+
     renderer.xr.setReferenceSpaceType(isAR ? 'local' : 'local-floor');
     await renderer.xr.setSession(session);
 
     if (isAR) {
-      xr.setScene(ar.scene);
       await startAR();
+      // The texture is still in flight — requesting the session first is what
+      // keeps the user's tap "recent" enough for the browser to allow it. A
+      // print that never arrives leaves the reticle working and nothing to
+      // hang, which beats dropping the visitor out of AR entirely.
       session.addEventListener('select', placePrint);
+      try {
+        pendingPrint.texture = await pendingPrint.texture;
+      } catch (err) {
+        console.warn('the print did not load', err);
+        pendingPrint = null;
+      }
     }
 
     session.addEventListener('end', () => {
       session = null;
       mode = null;
+      hitTestSource?.cancel?.();
       hitTestSource = null;
       if (placed) { ar.scene.remove(placed); placed = null; }
+      if (isAR) { rig.position.copy(rigWas.pos); rig.rotation.y = rigWas.rot; }
       ar.reticle.visible = false;
       xr.setScene(null);
       hooks.onSession?.(null);
@@ -257,7 +298,7 @@ export function setupXR(xr, hooks = {}) {
 
   return {
     enterVR: () => enter('vr'),
-    /** @param print {{texture: THREE.Texture, aspect: number}} */
+    /** @param print {{texture: THREE.Texture|Promise<THREE.Texture>, aspect: number}} */
     enterAR: (print) => enter('ar', print),
     end: () => session?.end(),
     get mode() { return mode; },

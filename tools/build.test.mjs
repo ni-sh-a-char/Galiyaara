@@ -3,6 +3,7 @@
  * decide the public URL of every photograph. Run with `npm test`.
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { resolveMeta, slugify, titleize } from './build.mjs';
 import { PROVIDERS, normalizePhoto, parseJson, pickProvider, pickProviders, reconcileShow } from './curate.mjs';
 
@@ -176,4 +177,41 @@ console.log(`ok — ${cases.length} filename cases`);
   assert.equal(pickProvider({}), null);
 
   console.log('ok — 9 provider-fallback cases');
+}
+
+// --- The headset paths -----------------------------------------------------
+// None of this can be exercised without a headset, so what is checked here is
+// the handful of single lines whose absence silently breaks AR or VR. Each one
+// was a real bug once; a grep is a poor test but it is the only one that runs
+// on a laptop, and it fails loudly if the line goes missing again.
+{
+  const read = (p) => readFileSync(new URL(`../public/${p}`, import.meta.url), 'utf8');
+  const [gallery, xr, main, html, css] = ['js/gallery.js', 'js/xr.js', 'js/main.js', 'index.html', 'css/site.css'].map(read);
+
+  // three derives its clear alpha from this: without it the AR framebuffer is
+  // cleared opaque and the passthrough camera is buried under black.
+  assert.match(gallery, /new THREE\.WebGLRenderer\(\{[^}]*\balpha:\s*true/, 'the renderer must ask for alpha or AR shows nothing');
+
+  // The camera hangs off the rig, so every headset pose is multiplied by the
+  // rig's corridor position. AR has to park it at the origin or the hit-test
+  // reticle and the print end up wherever the visitor last walked to.
+  assert.match(xr, /rigWas\.pos\.copy\(rig\.position\)[\s\S]{0,200}rig\.position\.set\(0, 0, 0\)/, 'AR must park the rig at the origin');
+  assert.match(xr, /rig\.position\.copy\(rigWas\.pos\)/, 'and give the corridor its walker back on exit');
+
+  // requestSession needs the tap to still be warm; awaiting a 2 MP texture
+  // first spends that activation and the session is refused.
+  assert.doesNotMatch(main, /await gallery\.loadTexture/, 'the print must not be awaited before the session is requested');
+
+  // #hud is display:none inside a session, so the one caption that has to be
+  // readable in AR cannot live inside it.
+  const hud = html.slice(html.indexOf('<div id="hud"'), html.indexOf('<aside id="plate"'));
+  assert.ok(!hud.includes('id="ar-hint"'), '#ar-hint must sit outside #hud, which AR hides');
+  assert.ok(html.includes('id="ar-hint"'), '...but must still exist');
+  assert.match(css, /#ar-hint \{[^}]*pointer-events: none/, 'the hint must not swallow the tap that hangs the print');
+
+  // Aiming the trigger at a frame in VR has to actually walk you up to it.
+  assert.match(gallery, /if \(xrMove\?\.\(dt, frame\)\) dock\.active = false;/, 'VR locomotion must cancel a dock glide');
+  assert.match(gallery, /dock\.active && renderScene === scene/, 'VR must glide to a docked frame, and AR must never dock');
+
+  console.log('ok — 8 headset smoke checks');
 }

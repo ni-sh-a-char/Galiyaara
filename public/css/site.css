@@ -648,8 +648,12 @@ body[data-xr="ar"] #grain,
 body[data-xr="ar"] #vignette { display: none; }
 body[data-xr="ar"] { background: transparent; }
 
+/* Deliberately not inside #hud: the HUD is display:none inside a session, and
+   this is the one caption that has to survive there. pointer-events:none keeps
+   the DOM overlay from swallowing the tap that hangs the print. */
 #ar-hint {
   position: fixed;
+  pointer-events: none;
   left: 50%;
   bottom: calc(2.4rem + var(--safe-b));
   transform: translateX(-50%);

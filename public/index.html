@@ -182,7 +182,6 @@
     <button id="tour-stop" class="chip">Wander off</button>
   </div>
   <div id="joy" aria-hidden="true"><i></i></div>
-  <div id="ar-hint" hidden>Point at a wall, then tap to hang the print &mdash; 60&nbsp;cm on the long edge.</div>
 </div>
 
 <aside id="plate" aria-live="polite" aria-hidden="true">
@@ -197,6 +196,10 @@
   <button id="enter-ar" class="chip" hidden>See it on your wall</button>
   <a class="plate-ig" href="https://www.instagram.com/ni_sh_a.char/" target="_blank" rel="noopener">More on Instagram &rarr;</a>
 </aside>
+
+<!-- Outside #hud on purpose: the HUD is hidden inside an AR session, and this
+     is the one thing that has to be readable there. -->
+<div id="ar-hint" hidden>Point at a wall, then tap to hang the print &mdash; 60&nbsp;cm on the long edge.</div>
 
 <script type="module" src="js/main.js"></script>
 </body>
