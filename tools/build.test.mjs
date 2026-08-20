@@ -217,14 +217,21 @@ console.log(`ok — ${cases.length} filename cases`);
   // whether or not the 2 MP texture beat the tap.
   assert.match(xr, /if \(!pendingPrint\?\.texture\) \{ wantsPlace = true; return; \}/, 'an early tap must be latched, not swallowed');
   assert.match(xr, /if \(wantsPlace\) placePrint\(\)/, 'and honoured once the print lands');
-  assert.match(xr, /ar\.reticle\.visible \? ar\.reticle\.matrix : null/, 'no detected wall must still place the print');
+  assert.match(xr, /onSurface \? ar\.reticle\.matrix : null/, 'no detected wall must still place the print');
+
+  // Hit-testing must be an enhancement. Unhandled, its rejection also skipped
+  // the 'select' listener below it — session alive, nothing placeable, ever.
+  assert.match(xr, /async function startAR\(\) \{\s*try \{/, 'startAR must not be able to reject');
+  assert.match(xr, /if \(!found\) aimFree\(\);[\s\S]{0,400}ar\.reticle\.visible = true;/,
+    'the reticle must show even with no surface — an invisible ring is why a live session looked dead');
+  assert.doesNotMatch(xr, /ar\.reticle\.visible = false;\s*return;/, 'zero hits must not blank the reticle');
   assert.match(xr, /print\.rotation\.order = 'YXZ'/, 'YXZ or prints off eye level hang crooked');
 
   // Neither headset mode available must say so rather than grow no buttons.
   assert.ok(html.includes('id="xr-note"'), 'there must be somewhere to explain a missing headset mode');
   assert.match(main, /if \(!vr && !ar\) \{[\s\S]{0,400}note\.hidden = false;/, 'unsupported must be stated, not silent');
 
-  console.log('ok — 14 headset smoke checks');
+  console.log('ok — 17 headset smoke checks');
 }
 
 // --- Where a print actually lands ------------------------------------------

@@ -284,6 +284,16 @@ async function wireXR(gallery, photos) {
       }
       if (mode === 'vr') gallery.setMode('roam');
     },
+    // Tell the visitor what the session can actually see. "Nothing is
+    // happening" and "your wall is too plain for ARCore to lock onto" look
+    // identical from the inside, and only one of them is a bug.
+    onAim(onSurface) {
+      const hint = $('#ar-hint');
+      if (hint.hidden) return;
+      hint.textContent = onSurface
+        ? 'Surface found — tap to hang the print here.'
+        : 'No surface yet (blank walls are hard to see). Tap to hang it in front of you.';
+    },
     onPlaced() { $('#ar-hint').hidden = true; },
   });
 

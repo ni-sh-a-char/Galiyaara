@@ -202,19 +202,64 @@ export function setupXR(xr, hooks = {}) {
   let pendingPrint = null;   // { texture, aspect } — texture may still be loading
   let wantsPlace = false;    // tapped before the print finished downloading
 
+  // Hit-testing is an enhancement, not a prerequisite. It is allowed to be
+  // unavailable or to find nothing; what is not allowed is for the session to
+  // end up with no reticle and no way to hang anything, which is what happened
+  // when this rejection went unhandled inside an async caller: the 'select'
+  // listener below it was never attached either.
   async function startAR() {
-    const viewer = await session.requestReferenceSpace('viewer');
-    hitTestSource = await session.requestHitTestSource({ space: viewer });
+    try {
+      const viewer = await session.requestReferenceSpace('viewer');
+      hitTestSource = await session.requestHitTestSource({ space: viewer });
+    } catch (err) {
+      console.warn('no hit-testing in this session — free placement only', err);
+      hitTestSource = null;
+    }
+  }
+
+  const eye = new THREE.Vector3();      // shared scratch: where the viewer is
+  const aim = new THREE.Vector3();      // and which way they are looking
+  const UP = new THREE.Vector3(0, 1, 0);
+  const ONE = new THREE.Vector3(1, 1, 1);
+  const at = new THREE.Vector3();
+  const facing = new THREE.Quaternion();
+  let onSurface = false;
+
+  /** Reticle floating at arm's length, turned to face the viewer. */
+  function aimFree() {
+    camera.getWorldPosition(eye);
+    camera.getWorldDirection(aim);
+    at.copy(eye).addScaledVector(aim, FREE_DIST);
+    // The ring's own normal is +Y, so point that back down the line of sight.
+    facing.setFromUnitVectors(UP, aim.clone().negate().normalize());
+    ar.reticle.matrix.compose(at, facing, ONE);
+    return false;
   }
 
   function arFrame(frame) {
-    if (!frame || !hitTestSource) return;
+    if (mode !== 'ar') return;
     const refSpace = renderer.xr.getReferenceSpace();
-    const hits = frame.getHitTestResults(hitTestSource);
-    if (!hits.length) { ar.reticle.visible = false; return; }
-    const pose = hits[0].getPose(refSpace);
+    let found = false;
+
+    if (frame && hitTestSource && refSpace) {
+      const hits = frame.getHitTestResults(hitTestSource);
+      const pose = hits.length ? hits[0].getPose(refSpace) : null;
+      if (pose) {
+        ar.reticle.matrix.fromArray(pose.transform.matrix);
+        found = true;
+      }
+    }
+    if (!found) aimFree();
+
+    // The reticle is ALWAYS visible. A ring the visitor can aim is the only
+    // feedback that the session is alive, and a blank painted wall — the exact
+    // surface people want a print on — is the one thing hit-testing reliably
+    // fails to see. Hiding the ring there left a working session looking dead.
     ar.reticle.visible = true;
-    ar.reticle.matrix.fromArray(pose.transform.matrix);
+    if (found !== onSurface) {
+      onSurface = found;
+      hooks.onAim?.(found);
+    }
   }
 
   // In AR, a tap places (or re-places) the print where the reticle is.
@@ -231,9 +276,6 @@ export function setupXR(xr, hooks = {}) {
   //   no texture — the print is a 2 MP download and the tap can easily beat
   //                it. Latch the intent and hang it the moment it lands,
   //                rather than swallowing the tap.
-  const eye = new THREE.Vector3();
-  const aim = new THREE.Vector3();
-
   function placePrint() {
     if (mode !== 'ar') return;
     if (!pendingPrint?.texture) { wantsPlace = true; return; }
@@ -249,7 +291,7 @@ export function setupXR(xr, hooks = {}) {
 
     camera.getWorldPosition(eye);
     camera.getWorldDirection(aim);
-    aimPrint(placed, eye, aim, ar.reticle.visible ? ar.reticle.matrix : null);
+    aimPrint(placed, eye, aim, onSurface ? ar.reticle.matrix : null);
     hooks.onPlaced?.();
   }
 
@@ -309,7 +351,7 @@ export function setupXR(xr, hooks = {}) {
     await renderer.xr.setSession(session);
 
     if (isAR) {
-      await startAR();
+      await startAR();   // never rejects; hit-test is optional
       // The texture is still in flight — requesting the session first is what
       // keeps the user's tap "recent" enough for the browser to allow it. A
       // print that never arrives leaves the reticle working and nothing to
@@ -332,6 +374,7 @@ export function setupXR(xr, hooks = {}) {
       hitTestSource = null;
       if (placed) { ar.scene.remove(placed); placed = null; }
       wantsPlace = false;
+      onSurface = false;
       if (isAR) { rig.position.copy(rigWas.pos); rig.rotation.y = rigWas.rot; }
       ar.reticle.visible = false;
       xr.setScene(null);
